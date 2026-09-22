@@ -10,7 +10,6 @@ import streamlit.components.v1 as components
 import gspread
 from google.oauth2.service_account import Credentials
 
-# 💡 페이지 기본 메뉴 및 레이아웃 설정
 st.set_page_config(page_title="VISION DATA VIEWER", layout="wide", initial_sidebar_state="collapsed")
 
 # 💡 컬러 변환 헬퍼 함수 (Area 차트 반투명 효과용)
@@ -20,7 +19,7 @@ def hex_to_rgba(hex_color, alpha):
     rgb = tuple(int(hex_color[i:i+hlen//3], 16) for i in range(0, hlen, hlen//3))
     return f"rgba({rgb[0]},{rgb[1]},{rgb[2]},{alpha})"
 
-# 💡 뷰어 전용 상태 초기화
+# 💡 뷰어 전용 상태 초기화 (메인 시스템 로직 모두 제거)
 if "current_page" not in st.session_state: st.session_state.current_page = "viewer"
 if "rotate_idx" not in st.session_state: st.session_state.rotate_idx = 0
 if "viewer_authenticated" not in st.session_state: st.session_state.viewer_authenticated = False
@@ -28,7 +27,7 @@ if "viewer_authenticated" not in st.session_state: st.session_state.viewer_authe
 # 💡 뷰어 전용 프리미엄 UI 및 [상단 기본 메뉴 완벽 숨김 처리]
 global_theme_css = """
 <style>
-/* 🚫 Streamlit 기본 상단 헤더, 메뉴, 툴바 완벽 은닉 (Share, GitHub 고양이, 별표, 더보기 등) */
+/* 🚫 Streamlit 기본 상단 헤더, 메뉴, 툴바 완벽 은닉 */
 header[data-testid="stHeader"] { display: none !important; }
 #MainMenu { display: none !important; visibility: hidden !important; }
 [data-testid="stToolbar"] { display: none !important; visibility: hidden !important; }
@@ -204,7 +203,7 @@ def load_universal_data():
         df_filtered = df[df['구분'].fillna('').astype(str).str.contains('1차', na=False)]
         if not df_filtered.empty: df = df_filtered
         
-    return df[ext_cols + ['DateTime', 'DateOnly']]
+    return df[ext_cols + ['_sheet_row', 'DateTime', 'DateOnly']]
 
 # ==========================================
 # 💡 뷰어 전용 로그인 페이지 (돌아가기 버튼 없음)
@@ -218,7 +217,6 @@ if not st.session_state.viewer_authenticated:
             st.markdown("<div style='text-align:center; color:#64748b; margin-bottom:20px; font-weight:bold;'>공유된 대시보드를 확인하려면 비밀번호를 입력하세요.</div>", unsafe_allow_html=True)
             pwd = st.text_input("비밀번호", type="password", label_visibility="collapsed", placeholder="비밀번호 입력", key="viewer_pwd")
             st.markdown("<br>", unsafe_allow_html=True)
-            # 💡 돌아가기 버튼을 제거하여 이 화면을 벗어날 수 없게 막음
             if st.button("✅ 접속", type="primary", use_container_width=True, key="viewer_confirm"):
                 if pwd == "7777":
                     st.session_state.viewer_authenticated = True
@@ -240,7 +238,6 @@ if not config:
 if "viewer_time_range" not in st.session_state:
     st.session_state.viewer_time_range = config.get("time_range", "48H")
 
-# 💡 자바스크립트로 수동 회전 버튼을 클릭하게 하는 오토 로테이션 로직
 if config.get("auto_rotate_active", False):
     components.html("""
     <script>
@@ -264,7 +261,8 @@ with col2:
     st.markdown("<br>", unsafe_allow_html=True)
     vc1, vc2 = st.columns([0.6, 0.4])
     with vc1:
-        st.session_state.viewer_time_range = st.radio("조회 기간", ["48H", "72H", "96H"], index=["48H", "72H", "96H"].index(st.session_state.viewer_time_range), horizontal=True, label_visibility="collapsed", key='v_time_range_radio')
+        # 💡 조회 기간에 24H 옵션 추가
+        st.session_state.viewer_time_range = st.radio("조회 기간", ["24H", "48H", "72H", "96H"], index=["24H", "48H", "72H", "96H"].index(st.session_state.viewer_time_range), horizontal=True, label_visibility="collapsed", key='v_time_range_radio')
     with vc2:
         if st.button("🔄 Manual Rotate", use_container_width=True, key="viewer_manual_rotate"):
             st.session_state.rotate_idx += 1
@@ -325,7 +323,9 @@ now_kst = datetime.now(timezone(timedelta(hours=9))).replace(tzinfo=None)
 target_end_date = now_kst.date() 
 
 time_range = st.session_state.viewer_time_range
-if time_range == "48H": days_sub = 1
+# 💡 기간 필터링 로직에 24H 추가
+if time_range == "24H": days_sub = 0
+elif time_range == "48H": days_sub = 1
 elif time_range == "72H": days_sub = 2
 else: days_sub = 3
 target_start_date = target_end_date - timedelta(days=days_sub)
@@ -366,22 +366,22 @@ y_t, y_g, y_c, y_f, y_r, y_o = get_qty_metrics(df_yesterday)
 df_6h = base_df_active[base_df_active['DateTime'] >= (now_kst - timedelta(hours=6))].copy() if not base_df_active.empty else pd.DataFrame()
 h_t, h_g, h_c, h_f, h_r, h_o = get_qty_metrics(df_6h)
 
-# 💡 [프리미엄 1단: 상단 그라데이션 통합 KPI 카드]
+# 💡 [프리미엄 1단: 상단 그라데이션 통합 KPI 카드 (블랙 -> 블루)]
 kpi_html = f"""
 <div style="display: flex; justify-content: space-between; gap: 15px; margin-bottom: 20px;">
-    <div style="flex: 1; background: linear-gradient(135deg, #4f46e5, #3b82f6); color: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+    <div style="flex: 1; background: linear-gradient(135deg, #000000, #4472C4); color: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
         <div style="font-size: 14px; font-weight: bold; opacity: 0.9;">총 검사 수량</div>
         <div style="font-size: 28px; font-weight: 900; margin-top: 5px;">{o_t:,.0f} <span style="font-size: 14px; font-weight: normal;">EA</span></div>
     </div>
-    <div style="flex: 1; background: linear-gradient(135deg, #0ea5e9, #0284c7); color: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+    <div style="flex: 1; background: linear-gradient(135deg, #000000, #4472C4); color: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
         <div style="font-size: 14px; font-weight: bold; opacity: 0.9;">양품 수량</div>
         <div style="font-size: 28px; font-weight: 900; margin-top: 5px;">{o_g:,.0f} <span style="font-size: 14px; font-weight: normal;">EA</span></div>
     </div>
-    <div style="flex: 1; background: linear-gradient(135deg, #f43f5e, #be123c); color: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+    <div style="flex: 1; background: linear-gradient(135deg, #000000, #4472C4); color: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
         <div style="font-size: 14px; font-weight: bold; opacity: 0.9;">총 불량 수량</div>
         <div style="font-size: 28px; font-weight: 900; margin-top: 5px;">{o_c + o_f + o_r + o_o:,.0f} <span style="font-size: 14px; font-weight: normal;">EA</span></div>
     </div>
-    <div style="flex: 1; background: linear-gradient(135deg, #10b981, #047857); color: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+    <div style="flex: 1; background: linear-gradient(135deg, #000000, #4472C4); color: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
         <div style="font-size: 14px; font-weight: bold; opacity: 0.9;">종합 양품율</div>
         <div style="font-size: 28px; font-weight: 900; margin-top: 5px;">{(o_g/o_t*100) if o_t > 0 else 0:.1f} <span style="font-size: 14px; font-weight: normal;">%</span></div>
     </div>
@@ -406,19 +406,21 @@ with col_left:
                 pct = (val / t_ins * 100) if t_ins > 0 else 0
                 txt.append(f"{label}<br>{pct:.1f}%")
                 
+        # 💡 원형 차트 내경(hole) 축소 및 도메인(domain) 여백 확보로 텍스트 짤림 방지 및 깊이감 부여
         fig = go.Figure(data=[go.Pie(
-            labels=l, values=v, hole=0.65,
+            labels=l, values=v, hole=0.55,
             marker=dict(colors=c, line=dict(color='#ffffff', width=2)),
             textinfo='text', text=txt, textposition='outside', 
             textfont=dict(color='#0f172a', weight='bold', size=12, family="'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif"),
-            hoverinfo='label+value', sort=False, direction='clockwise', rotation=270 
+            hoverinfo='label+value', sort=False, direction='clockwise', rotation=270,
+            domain=dict(x=[0.15, 0.85], y=[0.1, 0.9])
         )])
         fig.update_layout(
             title=dict(text=f"■ {title}", font=dict(color='#1e293b', size=14, weight='bold', family="'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif"), x=0.5, xanchor='center'),
             annotations=[dict(text=f"{t_ins:,.0f}<br><span style='font-size:11px; color:#64748b;'>Inspected</span>", 
                               x=0.5, y=0.5, font_size=20, font_color='#1e293b', font_family="'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif", showarrow=False)],
             showlegend=False, plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
-            margin=dict(l=30, r=30, t=40, b=10), height=260
+            margin=dict(l=40, r=40, t=50, b=30), height=260
         )
         return fig
 
@@ -483,7 +485,8 @@ with col_mid:
         else:
             fig_yld.update_xaxes(showgrid=True, gridcolor='#e2e8f0', linecolor='#cbd5e1')
             
-        fig_yld.update_yaxes(title_text="양품율 (%)", range=[y_min, 105.0], showgrid=True, gridcolor='#e2e8f0', linecolor='#cbd5e1')
+        # 💡 Y축 최대값을 100.0%로 고정하고 .0 포맷 강제 적용
+        fig_yld.update_yaxes(title_text="양품율 (%)", range=[y_min, 100.0], tickformat=".1f", showgrid=True, gridcolor='#e2e8f0', linecolor='#cbd5e1')
         st.plotly_chart(fig_yld, use_container_width=True, config={'displayModeBar': False})
         
     # --- 2-2. DEFECT TREND (Bar Chart) ---
@@ -508,17 +511,19 @@ with col_mid:
             margin=dict(l=30, r=30, t=50, b=30), height=380, hovermode='x unified'
         )
         
+        # 💡 X축 명칭 추가
         if not base_df_active.empty:
-            fig_def.update_xaxes(showgrid=False, linecolor='#cbd5e1', tickmode='array', tickvals=x_indices, ticktext=x_labels_def)
+            fig_def.update_xaxes(title_text="도장일 [도장순서]", showgrid=False, linecolor='#cbd5e1', tickmode='array', tickvals=x_indices, ticktext=x_labels_def)
         else:
-            fig_def.update_xaxes(showgrid=False, linecolor='#cbd5e1')
+            fig_def.update_xaxes(title_text="도장일 [도장순서]", showgrid=False, linecolor='#cbd5e1')
             
-        fig_def.update_yaxes(title_text="불량율 (%)", showgrid=True, gridcolor='#e2e8f0', linecolor='#cbd5e1')
+        # 💡 Y축 .0 포맷 강제 적용
+        fig_def.update_yaxes(title_text="불량율 (%)", tickformat=".1f", showgrid=True, gridcolor='#e2e8f0', linecolor='#cbd5e1')
         st.plotly_chart(fig_def, use_container_width=True, config={'displayModeBar': False})
 
 with col_right:
     with st.container(border=True):
-        st.markdown(f"<div class='metric-label' style='margin-top:5px; font-size:1.1rem;'>■ {time_range} ALERTS</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='metric-label' style='margin-top:5px; font-size:1.1rem;'>■ RECENT {time_range} ALERTS</div>", unsafe_allow_html=True)
         
         def render_sbl_list(d_col, title, is_yield=False):
             html = f"<div class='sbl-title' style='margin-top:10px;'>{title}</div>"
