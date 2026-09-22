@@ -12,6 +12,13 @@ from google.oauth2.service_account import Credentials
 
 st.set_page_config(page_title="VISION DATA VIEWER", layout="wide", initial_sidebar_state="collapsed")
 
+# 💡 컬러 변환 헬퍼 함수 (Area 차트 반투명 효과용)
+def hex_to_rgba(hex_color, alpha):
+    hex_color = hex_color.lstrip('#')
+    hlen = len(hex_color)
+    rgb = tuple(int(hex_color[i:i+hlen//3], 16) for i in range(0, hlen, hlen//3))
+    return f"rgba({rgb[0]},{rgb[1]},{rgb[2]},{alpha})"
+
 # 💡 이미지 로드 헬퍼 함수
 def get_image_base64(base_name):
     search_dirs = [os.getcwd(), os.path.dirname(os.path.abspath(__file__))]
@@ -29,13 +36,6 @@ def get_image_base64(base_name):
                 except Exception:
                     pass
     return None
-
-# 💡 컬러 변환 헬퍼 함수 (Area 차트 반투명 효과용)
-def hex_to_rgba(hex_color, alpha):
-    hex_color = hex_color.lstrip('#')
-    hlen = len(hex_color)
-    rgb = tuple(int(hex_color[i:i+hlen//3], 16) for i in range(0, hlen, hlen//3))
-    return f"rgba({rgb[0]},{rgb[1]},{rgb[2]},{alpha})"
 
 # 💡 뷰어 전용 상태 초기화
 if "current_page" not in st.session_state: st.session_state.current_page = "viewer"
@@ -79,6 +79,10 @@ div[data-testid="stVerticalBlockBorderWrapper"] { background-color: #ffffff !imp
 .command-header { color: #1e293b !important; font-weight: 900 !important; letter-spacing: 1px; }
 .metric-label { color: #1e293b !important; font-size: 1.1rem !important; font-weight: 800 !important; letter-spacing: 1px; margin-bottom: 10px; border-bottom: 2px solid #e2e8f0; padding-bottom: 5px; }
 
+/* 💡 적용 모델 카드 전용 텍스트 색상 강제 지정 (#FFFFFF) */
+.model-card { background: #000000; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); flex: 1; }
+.model-card div, .model-card span { color: #FFFFFF !important; }
+
 /* 💡 상단 KPI 그라데이션 카드 전용 텍스트 색상 강제 지정 (#FFC000) */
 .kpi-card { background: linear-gradient(135deg, #000000, #4472C4); padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); flex: 1; }
 .kpi-card div, .kpi-card span { color: #FFC000 !important; }
@@ -91,10 +95,7 @@ div[data-testid="stVerticalBlockBorderWrapper"] { background-color: #ffffff !imp
 .live-dot { height: 12px; width: 12px; background-color: #3b82f6; border-radius: 50%; display: inline-block; margin-right: 12px; margin-bottom: 2px; animation: blink 1.5s ease-in-out infinite; }
 
 div[data-testid="stButton"] button { height: 2.6rem !important; min-height: 2.6rem !important; font-size: 1.1rem !important; font-weight: bold !important; border-radius: 8px !important; background-color: #E7E6E6 !important; color: #000000 !important; border: 1px solid #cbd5e1 !important; transition: all 0.2s ease; }
-/* 💡 버튼 Hover 시 p태그(글자색)를 강제 흰색으로 변경 */
 div[data-testid="stButton"] button:hover { background-color: #1e293b !important; color: #ffffff !important; border-color: #1e293b !important; }
-div[data-testid="stButton"] button:hover p { color: #ffffff !important; }
-
 div[data-testid="stButton"] button[kind="primary"] { background-color: #1e293b !important; color: #ffffff !important; border: 1px solid #0f172a !important; }
 div[data-testid="stButton"] button[kind="primary"]:hover { background-color: #0f172a !important; }
 div[data-testid="stButton"] button[kind="primary"] p { color: #ffffff !important; }
@@ -288,15 +289,17 @@ if not config:
 if "viewer_time_range" not in st.session_state:
     st.session_state.viewer_time_range = config.get("time_range", "48H")
 
-# 💡 자바스크립트로 Manage app 배지 2초마다 철저히 삭제 & 30분 자동 새로고침 & 10분 오토 로테이션 적용
+# 💡 자바스크립트로 Manage app 배지 텍스트 추적하여 원천 삭제 & 자동 새로고침 & 오토 로테이션 적용
 auto_script = f"""
 <script>
-// Manage app 및 각종 배지 제거 로직 (프레임 단위 강제 삭제)
+// Manage app 및 각종 배지 제거 로직 (텍스트 자체를 추적하여 무결점 차단)
 const hideBadges = () => {{
-    const badges = window.parent.document.querySelectorAll('div[class*="viewerBadge"], [data-testid="stAppDeployButton"], .stDeployButton, [data-testid="manage-app-button"]');
-    badges.forEach(b => {{ 
-        b.style.setProperty('display', 'none', 'important'); 
-        b.style.setProperty('visibility', 'hidden', 'important'); 
+    const elements = window.parent.document.querySelectorAll('div, a, button, span');
+    elements.forEach(el => {{
+        if (el.textContent && el.textContent.includes('Manage app')) {{
+            el.style.setProperty('display', 'none', 'important');
+            if (el.parentElement) el.parentElement.style.setProperty('display', 'none', 'important');
+        }}
     }});
     const iframes = window.parent.document.querySelectorAll('iframe');
     iframes.forEach(f => {{
@@ -304,7 +307,7 @@ const hideBadges = () => {{
     }});
 }};
 hideBadges();
-setInterval(hideBadges, 2000); 
+setInterval(hideBadges, 1000); // 1초마다 감시하여 즉시 차단
 
 // 30분(1800000ms) 자동 새로고침 (RELOAD 클릭)
 setTimeout(function() {{
@@ -332,7 +335,12 @@ with col2:
     st.markdown("<br>", unsafe_allow_html=True)
     logo_s_data = get_image_base64("at")
     if logo_s_data:
+        # 로고가 정상적으로 변환된 경우 출력
         st.markdown(f"<img src='{logo_s_data}' style='height: 35px; margin-top: -10px;'>", unsafe_allow_html=True)
+    else:
+        # 💡 로고 이미지가 없는 경우 안내 메시지 출력 (at.png 업로드 필요)
+        st.markdown("<div style='color:#ef4444; font-size:0.8rem; font-weight:bold;'>※ 안내: 뷰어 GitHub 레포지토리에 'at.png' 이미지 파일을 업로드해 주세요.</div>", unsafe_allow_html=True)
+
 with col3:
     st.markdown("<br>", unsafe_allow_html=True)
     vc1, vc2 = st.columns(2)
@@ -449,9 +457,9 @@ h_t, h_g, h_c, h_f, h_r, h_o = get_qty_metrics(df_6h)
 # 💡 [프리미엄 1단: 1x5 KPI 레이아웃 적용 (적용 모델 신설 & 강제 클래스 배정)]
 kpi_html = f"""
 <div style="display: flex; justify-content: space-between; gap: 15px; margin-bottom: 20px;">
-    <div style="flex: 1; background: #000000; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-        <div style="font-size: 14px; font-weight: bold; opacity: 0.9; color: #ffffff !important;">적용 모델</div>
-        <div style="font-size: 24px; font-weight: 900; margin-top: 5px; color: #ffffff !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{display_model_text}</div>
+    <div class="model-card">
+        <div style="font-size: 14px; font-weight: bold; opacity: 0.9;">적용 모델</div>
+        <div style="font-size: 24px; font-weight: 900; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{display_model_text}</div>
     </div>
     <div class="kpi-card">
         <div style="font-size: 14px; font-weight: bold; opacity: 0.9;">총 검사 수량</div>
@@ -553,6 +561,7 @@ with col_mid:
                     line=dict(color=c1, width=3, shape='spline'), marker=dict(size=8, color=c1, symbol='diamond'), hovertext=m_df['HoverText']
                 ))
 
+        # 💡 좌측 정렬 타이틀, 상단 여백 확장(t: 80), 좌하단 여백 확장(l:60, b:60)
         fig_yld.update_layout(
             title=dict(text=f"■ YIELD TREND ({time_range})", font=dict(color='#1e293b', size=16, weight='bold', family="'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif"), x=0.0, xanchor='left'),
             plot_bgcolor='#ffffff', paper_bgcolor='#ffffff',
@@ -592,7 +601,6 @@ with col_mid:
             margin=dict(l=60, r=30, t=80, b=60), height=380, hovermode='x unified'
         )
         
-        # 💡 [X축 명칭 여백(title_standoff=40) 대폭 확대 적용하여 겹침 방지]
         if not base_df_active.empty:
             fig_def.update_xaxes(title_text="도장일 [도장순서]", title_standoff=40, showgrid=False, linecolor='#94a3b8', tickmode='array', tickvals=x_indices, ticktext=x_labels_def, tickfont=dict(color='#1e293b', size=11), title_font=dict(color='#1e293b', size=13))
         else:
