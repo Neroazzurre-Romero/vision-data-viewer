@@ -42,7 +42,7 @@ if "current_page" not in st.session_state: st.session_state.current_page = "view
 if "rotate_idx" not in st.session_state: st.session_state.rotate_idx = 0
 if "viewer_authenticated" not in st.session_state: st.session_state.viewer_authenticated = False
 
-# 💡 뷰어 전용 프리미엄 UI CSS
+# 💡 뷰어 전용 프리미엄 UI 및 [Manage app 완벽 숨김 처리 CSS]
 global_theme_css = """
 <style>
 /* 🚫 Streamlit 기본 상단 헤더, 메뉴, 툴바 완벽 은닉 */
@@ -51,7 +51,7 @@ header[data-testid="stHeader"] { display: none !important; }
 [data-testid="stToolbar"] { display: none !important; visibility: hidden !important; }
 footer { display: none !important; } 
 
-/* 🚫 Streamlit Cloud 하단 '< Manage app' 버튼 CSS 1차 완벽 은닉 */
+/* 🚫 Streamlit Cloud 하단 '< Manage app' 버튼 CSS 완벽 은닉 */
 [data-testid="stAppDeployButton"] { display: none !important; visibility: hidden !important; }
 .stDeployButton { display: none !important; visibility: hidden !important; }
 [data-testid="viewerBadge"] { display: none !important; visibility: hidden !important; }
@@ -70,6 +70,9 @@ h1, h2, h3, h4, h5, h6, p, label { font-family: 'Apple SD Gothic Neo', 'Malgun G
 div[data-baseweb="input"] > div { background-color: #ffffff !important; border: 1px solid #cbd5e1 !important; }
 div[data-baseweb="input"] input { color: #1e293b !important; font-weight: bold !important; }
 div[data-testid="stRadio"] label, div[data-testid="stRadio"] div { color: #1e293b !important; font-weight: bold !important; cursor: pointer !important; }
+
+/* 💡 라디오 버튼(조회 기간) 우측 정렬 강제 적용 */
+div[role="radiogroup"] { justify-content: flex-end !important; }
 
 div[data-testid="stVerticalBlockBorderWrapper"] { background-color: #ffffff !important; border-radius: 12px !important; border: 1px solid #e2e8f0 !important; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03) !important; padding: 1.5rem !important; margin-bottom: 0.8rem !important; }
 .command-header { color: #1e293b !important; font-weight: 900 !important; letter-spacing: 1px; }
@@ -253,18 +256,13 @@ def load_universal_data():
     return df[final_cols]
 
 # ==========================================
-# 💡 뷰어 전용 로그인 페이지 (로고 반영)
+# 💡 뷰어 전용 로그인 페이지
 # ==========================================
 if not st.session_state.viewer_authenticated:
     st.markdown("<br><br><br><br><br>", unsafe_allow_html=True)
     col_sp1, col_auth, col_sp3 = st.columns([1, 1, 1])
     with col_auth:
         with st.container(border=True):
-            # 💡 비밀번호 인증 페이지 상단에 로고 추가
-            logo_l_data = get_image_base64("logo")
-            if logo_l_data:
-                st.markdown(f"<div style='text-align: center;'><img src='{logo_l_data}' style='max-width: 100%; max-height: 80px; object-fit: contain; margin-bottom: 15px;'></div>", unsafe_allow_html=True)
-                
             st.markdown("<h3 style='text-align:center; color:#1e293b; font-weight:900;'>👁️ 뷰어 접속 인증</h3>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; color:#64748b; margin-bottom:20px; font-weight:bold;'>공유된 대시보드를 확인하려면 비밀번호를 입력하세요.</div>", unsafe_allow_html=True)
             pwd = st.text_input("비밀번호", type="password", label_visibility="collapsed", placeholder="비밀번호 입력", key="viewer_pwd")
@@ -290,30 +288,26 @@ if not config:
 if "viewer_time_range" not in st.session_state:
     st.session_state.viewer_time_range = config.get("time_range", "48H")
 
-# 💡 자바스크립트: Manage app 배지 안전하게 원천 삭제 & 자동 새로고침(30분) & 로테이션(10분)
+# 💡 자바스크립트: Manage app 배지 텍스트 추적 소멸 & 자동 새로고침(30분) & 로테이션(10분)
 auto_script = f"""
 <script>
-// 💡 무한 로딩 방지용 안전한 Manage app 배지 제거 로직
 const hideBadges = () => {{
     try {{
-        const spans = window.parent.document.querySelectorAll('span');
-        spans.forEach(span => {{
-            if (span.textContent.trim() === 'Manage app') {{
-                let target = span.closest('button') || span.parentElement;
-                if(target) target.style.setProperty('display', 'none', 'important');
-            }}
-        }});
-        
         const badges = window.parent.document.querySelectorAll('[data-testid="stAppDeployButton"], .stDeployButton, [data-testid="manage-app-button"]');
-        badges.forEach(b => {{ 
-            b.style.setProperty('display', 'none', 'important'); 
-        }});
+        badges.forEach(b => {{ b.style.setProperty('display', 'none', 'important'); }});
+        
+        const elements = window.parent.document.querySelectorAll('*');
+        for (let el of elements) {{
+            if (el.innerText && el.innerText.trim() === '< Manage app') {{
+                el.style.setProperty('display', 'none', 'important');
+                if(el.parentElement) el.parentElement.style.setProperty('display', 'none', 'important');
+            }}
+        }}
     }} catch (e) {{}}
 }};
 hideBadges();
-setInterval(hideBadges, 2000); 
+setInterval(hideBadges, 500); 
 
-// 30분(1800000ms) 자동 새로고침 (RELOAD 클릭)
 setTimeout(function() {{
     const btns = window.parent.document.querySelectorAll('button');
     for(let i=0; i<btns.length; i++){{
@@ -324,20 +318,20 @@ setTimeout(function() {{
     }}
 }}, 1800000); 
 
-// 오토 로테이션 (10분)
 {'setTimeout(function() { const btns = window.parent.document.querySelectorAll("button"); for(let i=0; i<btns.length; i++){ if(btns[i].textContent && btns[i].textContent.includes("Manual Rotate")){ btns[i].click(); break; } } }, 600000);' if config.get("auto_rotate_active", False) else ''}
 </script>
 """
 components.html(auto_script, height=0, width=0)
 
-# 💡 [상단 네비게이션: 타이틀, 컨트롤 버튼 (로고 제거됨)]
+# 💡 [상단 네비게이션]
 col1, col2, col3 = st.columns([0.4, 0.35, 0.25])
 with col1:
     st.markdown(f"<div class='command-header' style='font-size: 1.8rem; margin-top: 5px;'><span class='live-dot'></span>AI DEEP-DIVE COMMAND CENTER (VIEWER)</div>", unsafe_allow_html=True)
     st.markdown("<div style='color: #10b981; font-size: 0.85rem; margin-bottom: 15px; font-weight:bold;'>Shared Dashboard (View Only)</div>", unsafe_allow_html=True)
 with col2:
-    # 💡 요청에 따라 메인 화면 상단의 로고 이미지 출력 코드 삭제
-    st.write("")
+    logo_s_data = get_image_base64("at")
+    if logo_s_data:
+        st.markdown(f"<div style='text-align: center; margin-top: 15px;'><img src='{logo_s_data}' style='height: 80px; object-fit: contain;'></div>", unsafe_allow_html=True)
 with col3:
     st.markdown("<br>", unsafe_allow_html=True)
     vc1, vc2 = st.columns(2)
@@ -399,18 +393,26 @@ if '모델명(MI)' not in df.columns or df['모델명(MI)'].replace('', np.nan).
 now_kst = datetime.now(timezone(timedelta(hours=9))).replace(tzinfo=None)
 target_end_date = now_kst.date() 
 
-# 💡 [라디오 버튼 우측 정렬 배치 (종합 양품율 카드 바로 위)]
-rad_c1, rad_c2 = st.columns([0.75, 0.25])
+# 💡 [라디오 버튼: 6H 추가 및 우측 정렬 CSS 적용]
+rad_c1, rad_c2 = st.columns([0.6, 0.4])
 with rad_c2:
-    st.session_state.viewer_time_range = st.radio("조회 기간", ["24H", "48H", "72H", "96H"], index=["24H", "48H", "72H", "96H"].index(st.session_state.viewer_time_range), horizontal=True, label_visibility="collapsed", key='v_time_range_radio')
+    options_list = ["6H", "24H", "48H", "72H", "96H"]
+    idx = options_list.index(st.session_state.viewer_time_range) if st.session_state.viewer_time_range in options_list else 2
+    st.session_state.viewer_time_range = st.radio("조회 기간", options_list, index=idx, horizontal=True, label_visibility="collapsed", key='v_time_range_radio')
 
 time_range = st.session_state.viewer_time_range
-if time_range == "24H": days_sub = 0
-elif time_range == "48H": days_sub = 1
-elif time_range == "72H": days_sub = 2
-else: days_sub = 3
-target_start_date = target_end_date - timedelta(days=days_sub)
-df_target = df[(df['DateOnly'] >= target_start_date) & (df['DateOnly'] <= target_end_date)].copy()
+
+# 💡 [6H 선택 시 DateTime 기준으로 실시간 필터링 적용]
+if time_range == "6H":
+    target_start_dt = now_kst - timedelta(hours=6)
+    df_target = df[df['DateTime'] >= target_start_dt].copy()
+else:
+    if time_range == "24H": days_sub = 0
+    elif time_range == "48H": days_sub = 1
+    elif time_range == "72H": days_sub = 2
+    else: days_sub = 3
+    target_start_date = target_end_date - timedelta(days=days_sub)
+    df_target = df[(df['DateOnly'] >= target_start_date) & (df['DateOnly'] <= target_end_date)].copy()
 
 display_std = config.get("sel_std", [])
 display_inc = config.get("sel_inc", [])
@@ -451,7 +453,6 @@ y_t, y_g, y_c, y_f, y_r, y_o = get_qty_metrics(df_yesterday)
 df_6h = base_df_active[base_df_active['DateTime'] >= (now_kst - timedelta(hours=6))].copy() if not base_df_active.empty else pd.DataFrame()
 h_t, h_g, h_c, h_f, h_r, h_o = get_qty_metrics(df_6h)
 
-# 💡 [프리미엄 1단: 1x5 KPI 레이아웃 적용 (적용 모델 신설 & 강제 클래스 배정)]
 kpi_html = f"""
 <div style="display: flex; justify-content: space-between; gap: 15px; margin-bottom: 20px;">
     <div class="model-card">
@@ -558,7 +559,6 @@ with col_mid:
                     line=dict(color=c1, width=3, shape='spline'), marker=dict(size=8, color=c1, symbol='diamond'), hovertext=m_df['HoverText']
                 ))
 
-        # 💡 좌측 정렬 타이틀, 상단 여백 확장(t: 80), 좌하단 여백 확장(l:60, b:60)
         fig_yld.update_layout(
             title=dict(text=f"■ YIELD TREND ({time_range})", font=dict(color='#1e293b', size=16, weight='bold', family="'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif"), x=0.0, xanchor='left'),
             plot_bgcolor='#ffffff', paper_bgcolor='#ffffff',
