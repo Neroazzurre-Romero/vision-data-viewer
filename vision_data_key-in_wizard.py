@@ -20,23 +20,6 @@ def hex_to_rgba(hex_color, alpha):
     rgb = tuple(int(hex_color[i:i+hlen//3], 16) for i in range(0, hlen, hlen//3))
     return f"rgba({rgb[0]},{rgb[1]},{rgb[2]},{alpha})"
 
-# 💡 이미지 로드 헬퍼 함수
-def get_image_base64(base_name):
-    try:
-        extensions = ['.png', '.jpg', '.jpeg']
-        search_dirs = [os.getcwd(), os.path.dirname(os.path.abspath(__file__))]
-        for directory in search_dirs:
-            for ext in extensions:
-                filepath = os.path.join(directory, base_name + ext)
-                if os.path.exists(filepath):
-                    with open(filepath, "rb") as img_file:
-                        encoded = base64.b64encode(img_file.read()).decode('utf-8')
-                        mime_type = "image/jpeg" if ext in ['.jpg', '.jpeg'] else "image/png"
-                        return f"data:{mime_type};base64,{encoded}"
-    except Exception:
-        pass
-    return None
-
 # 💡 뷰어 전용 상태 초기화
 if "current_page" not in st.session_state: st.session_state.current_page = "viewer"
 if "rotate_idx" not in st.session_state: st.session_state.rotate_idx = 0
@@ -51,7 +34,7 @@ header[data-testid="stHeader"] { display: none !important; }
 [data-testid="stToolbar"] { display: none !important; visibility: hidden !important; }
 footer { display: none !important; } 
 
-/* 🚫 Streamlit Cloud 하단 '< Manage app' 버튼 CSS 완벽 은닉 */
+/* 🚫 Streamlit Cloud 하단 '< Manage app' 버튼 CSS 1차 완벽 은닉 */
 [data-testid="stAppDeployButton"] { display: none !important; visibility: hidden !important; }
 .stDeployButton { display: none !important; visibility: hidden !important; }
 [data-testid="viewerBadge"] { display: none !important; visibility: hidden !important; }
@@ -72,7 +55,8 @@ div[data-baseweb="input"] input { color: #1e293b !important; font-weight: bold !
 div[data-testid="stRadio"] label, div[data-testid="stRadio"] div { color: #1e293b !important; font-weight: bold !important; cursor: pointer !important; }
 
 /* 💡 라디오 버튼(조회 기간) 우측 정렬 강제 적용 */
-div[role="radiogroup"] { justify-content: flex-end !important; }
+div[data-testid="stRadio"] { display: flex; justify-content: flex-end; width: 100%; }
+div[role="radiogroup"] { justify-content: flex-end !important; flex-wrap: nowrap !important; }
 
 div[data-testid="stVerticalBlockBorderWrapper"] { background-color: #ffffff !important; border-radius: 12px !important; border: 1px solid #e2e8f0 !important; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03) !important; padding: 1.5rem !important; margin-bottom: 0.8rem !important; }
 .command-header { color: #1e293b !important; font-weight: 900 !important; letter-spacing: 1px; }
@@ -291,6 +275,7 @@ if "viewer_time_range" not in st.session_state:
 # 💡 자바스크립트: Manage app 배지 텍스트 추적 소멸 & 자동 새로고침(30분) & 로테이션(10분)
 auto_script = f"""
 <script>
+// 💡 무한 로딩 없는 초강력 Manage app 텍스트 추적 소멸 로직
 const hideBadges = () => {{
     try {{
         const badges = window.parent.document.querySelectorAll('[data-testid="stAppDeployButton"], .stDeployButton, [data-testid="manage-app-button"]');
@@ -308,6 +293,7 @@ const hideBadges = () => {{
 hideBadges();
 setInterval(hideBadges, 500); 
 
+// 30분(1800000ms) 자동 새로고침 (RELOAD 클릭)
 setTimeout(function() {{
     const btns = window.parent.document.querySelectorAll('button');
     for(let i=0; i<btns.length; i++){{
@@ -318,21 +304,18 @@ setTimeout(function() {{
     }}
 }}, 1800000); 
 
+// 오토 로테이션 (10분)
 {'setTimeout(function() { const btns = window.parent.document.querySelectorAll("button"); for(let i=0; i<btns.length; i++){ if(btns[i].textContent && btns[i].textContent.includes("Manual Rotate")){ btns[i].click(); break; } } }, 600000);' if config.get("auto_rotate_active", False) else ''}
 </script>
 """
 components.html(auto_script, height=0, width=0)
 
-# 💡 [상단 네비게이션]
-col1, col2, col3 = st.columns([0.4, 0.35, 0.25])
+# 💡 [상단 네비게이션: 타이틀, 컨트롤 버튼 (로고 완전 제거)]
+col1, col2 = st.columns([0.7, 0.3])
 with col1:
     st.markdown(f"<div class='command-header' style='font-size: 1.8rem; margin-top: 5px;'><span class='live-dot'></span>AI DEEP-DIVE COMMAND CENTER (VIEWER)</div>", unsafe_allow_html=True)
     st.markdown("<div style='color: #10b981; font-size: 0.85rem; margin-bottom: 15px; font-weight:bold;'>Shared Dashboard (View Only)</div>", unsafe_allow_html=True)
 with col2:
-    logo_s_data = get_image_base64("at")
-    if logo_s_data:
-        st.markdown(f"<div style='text-align: center; margin-top: 15px;'><img src='{logo_s_data}' style='height: 80px; object-fit: contain;'></div>", unsafe_allow_html=True)
-with col3:
     st.markdown("<br>", unsafe_allow_html=True)
     vc1, vc2 = st.columns(2)
     with vc1:
@@ -393,7 +376,7 @@ if '모델명(MI)' not in df.columns or df['모델명(MI)'].replace('', np.nan).
 now_kst = datetime.now(timezone(timedelta(hours=9))).replace(tzinfo=None)
 target_end_date = now_kst.date() 
 
-# 💡 [라디오 버튼: 6H 추가 및 우측 정렬 CSS 적용]
+# 💡 [라디오 버튼: 6H 옵션 추가 및 우측 정렬 유지]
 rad_c1, rad_c2 = st.columns([0.6, 0.4])
 with rad_c2:
     options_list = ["6H", "24H", "48H", "72H", "96H"]
@@ -402,7 +385,7 @@ with rad_c2:
 
 time_range = st.session_state.viewer_time_range
 
-# 💡 [6H 선택 시 DateTime 기준으로 실시간 필터링 적용]
+# 💡 [6H 및 기간별 필터링 분기]
 if time_range == "6H":
     target_start_dt = now_kst - timedelta(hours=6)
     df_target = df[df['DateTime'] >= target_start_dt].copy()
@@ -453,6 +436,7 @@ y_t, y_g, y_c, y_f, y_r, y_o = get_qty_metrics(df_yesterday)
 df_6h = base_df_active[base_df_active['DateTime'] >= (now_kst - timedelta(hours=6))].copy() if not base_df_active.empty else pd.DataFrame()
 h_t, h_g, h_c, h_f, h_r, h_o = get_qty_metrics(df_6h)
 
+# 💡 [프리미엄 1단: 1x5 KPI 레이아웃 적용]
 kpi_html = f"""
 <div style="display: flex; justify-content: space-between; gap: 15px; margin-bottom: 20px;">
     <div class="model-card">
@@ -559,6 +543,7 @@ with col_mid:
                     line=dict(color=c1, width=3, shape='spline'), marker=dict(size=8, color=c1, symbol='diamond'), hovertext=m_df['HoverText']
                 ))
 
+        # 💡 좌측 정렬 타이틀, 여백 최적화 유지
         fig_yld.update_layout(
             title=dict(text=f"■ YIELD TREND ({time_range})", font=dict(color='#1e293b', size=16, weight='bold', family="'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif"), x=0.0, xanchor='left'),
             plot_bgcolor='#ffffff', paper_bgcolor='#ffffff',
@@ -598,6 +583,7 @@ with col_mid:
             margin=dict(l=60, r=30, t=80, b=60), height=380, hovermode='x unified'
         )
         
+        # 💡 [X축 명칭 여백(title_standoff=40) 적용]
         if not base_df_active.empty:
             fig_def.update_xaxes(title_text="도장일 [도장순서]", title_standoff=40, showgrid=False, linecolor='#94a3b8', tickmode='array', tickvals=x_indices, ticktext=x_labels_def, tickfont=dict(color='#1e293b', size=11), title_font=dict(color='#1e293b', size=13))
         else:
