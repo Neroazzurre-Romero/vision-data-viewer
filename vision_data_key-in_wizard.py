@@ -24,7 +24,7 @@ if "current_page" not in st.session_state: st.session_state.current_page = "view
 if "rotate_idx" not in st.session_state: st.session_state.rotate_idx = 0
 if "viewer_authenticated" not in st.session_state: st.session_state.viewer_authenticated = False
 
-# 💡 뷰어 전용 프리미엄 UI 및 [강제 라이트 테마 & 메뉴/Manage app 숨김 처리 CSS]
+# 💡 뷰어 전용 프리미엄 UI 및 [Manage app 완벽 숨김 처리 CSS]
 global_theme_css = """
 <style>
 /* 🚫 Streamlit 기본 상단 헤더, 메뉴, 툴바 완벽 은닉 */
@@ -33,11 +33,15 @@ header[data-testid="stHeader"] { display: none !important; }
 [data-testid="stToolbar"] { display: none !important; visibility: hidden !important; }
 footer { display: none !important; } 
 
-/* 🚫 Streamlit Cloud 하단 '< Manage app' 버튼 완벽 은닉 */
+/* 🚫 Streamlit Cloud 하단 '< Manage app' 버튼 완벽 은닉 (가능한 모든 클래스 동원) */
 [data-testid="stAppDeployButton"] { display: none !important; visibility: hidden !important; }
 [data-testid="viewerBadge"] { display: none !important; visibility: hidden !important; }
+[data-testid="manage-app-button"] { display: none !important; visibility: hidden !important; }
+#viewerBadge_container__1__ { display: none !important; visibility: hidden !important; }
 .viewerBadge_container__1__ { display: none !important; visibility: hidden !important; }
 [class^="viewerBadge_"] { display: none !important; visibility: hidden !important; }
+[class*="manage-app-button"] { display: none !important; visibility: hidden !important; }
+.stDeployButton { display: none !important; visibility: hidden !important; }
 
 /* 🚫 사이드바 및 붕 뜨는 공간 제거 */
 [data-testid="collapsedControl"] { display: none !important; pointer-events: none !important; }
@@ -231,7 +235,7 @@ def load_universal_data():
     return df[final_cols]
 
 # ==========================================
-# 💡 뷰어 전용 로그인 페이지 (돌아가기 버튼 없음)
+# 💡 뷰어 전용 로그인 페이지
 # ==========================================
 if not st.session_state.viewer_authenticated:
     st.markdown("<br><br><br><br><br>", unsafe_allow_html=True)
@@ -263,9 +267,21 @@ if not config:
 if "viewer_time_range" not in st.session_state:
     st.session_state.viewer_time_range = config.get("time_range", "48H")
 
-# 💡 자바스크립트로 30분(1800000ms)마다 무조건 데이터 새로고침 (RELOAD 버튼 자동 클릭)
-components.html("""
+# 💡 자바스크립트로 Manage app 배지 2초마다 삭제 & 30분마다 자동 새로고침(Auto-Reload) 적용
+auto_script = """
 <script>
+// Manage app 및 각종 배지 제거 로직
+const hideBadges = () => {
+    const badges = window.parent.document.querySelectorAll('div[class*="viewerBadge"], [data-testid="stAppDeployButton"], .stDeployButton, [data-testid="manage-app-button"]');
+    badges.forEach(b => { 
+        b.style.setProperty('display', 'none', 'important'); 
+        b.style.setProperty('visibility', 'hidden', 'important'); 
+    });
+};
+hideBadges();
+setInterval(hideBadges, 2000); // 주기적으로 스캔하여 철저히 삭제
+
+// 30분(1800000ms) 자동 새로고침
 setTimeout(function() {
     const btns = window.parent.document.querySelectorAll('button');
     for(let i=0; i<btns.length; i++){
@@ -276,9 +292,9 @@ setTimeout(function() {
     }
 }, 1800000); 
 </script>
-""", height=0, width=0)
+"""
+components.html(auto_script, height=0, width=0)
 
-# 💡 자바스크립트로 수동 회전 버튼을 클릭하게 하는 오토 로테이션 로직 (10분)
 if config.get("auto_rotate_active", False):
     components.html("""
     <script>
@@ -508,12 +524,13 @@ with col_mid:
                     line=dict(color=c1, width=3, shape='spline'), marker=dict(size=8, color=c1, symbol='diamond'), hovertext=m_df['HoverText']
                 ))
 
+        # 💡 좌측 정렬 타이틀, 상단 여백 확장(t: 80), 좌하단 여백 확장(l:60, b:60)
         fig_yld.update_layout(
             title=dict(text=f"■ YIELD TREND ({time_range})", font=dict(color='#1e293b', size=16, weight='bold', family="'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif"), x=0.0, xanchor='left'),
             plot_bgcolor='#ffffff', paper_bgcolor='#ffffff',
             font=dict(color='#1e293b', family="'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif"),
             legend=dict(orientation="h", yanchor="bottom", y=1.15, xanchor="right", x=1, font=dict(color='#1e293b', size=12)), 
-            margin=dict(l=30, r=30, t=80, b=30), height=380, hovermode='x unified'
+            margin=dict(l=60, r=30, t=80, b=60), height=380, hovermode='x unified'
         )
         
         if not base_df_active.empty:
@@ -522,7 +539,8 @@ with col_mid:
         else:
             fig_yld.update_xaxes(showgrid=True, gridcolor='#e2e8f0', linecolor='#94a3b8', tickfont=dict(color='#1e293b', size=11))
             
-        fig_yld.update_yaxes(title_text="양품율 (%)", range=[y_min, 100.0], tickformat=".1f", showgrid=True, gridcolor='#e2e8f0', linecolor='#94a3b8', tickfont=dict(color='#1e293b', size=11), title_font=dict(color='#1e293b', size=13))
+        # 💡 [Y축 명칭 여백(title_standoff=30) 적용하여 숫자와 완전히 띄우기]
+        fig_yld.update_yaxes(title_text="양품율 (%)", range=[y_min, 100.0], tickformat=".1f", showgrid=True, gridcolor='#e2e8f0', linecolor='#94a3b8', tickfont=dict(color='#1e293b', size=11), title_font=dict(color='#1e293b', size=13), title_standoff=30)
         st.plotly_chart(fig_yld, use_container_width=True, config={'displayModeBar': False}, theme=None)
         
     # --- 2-2. DEFECT TREND (Bar Chart) ---
@@ -538,23 +556,24 @@ with col_mid:
             fig_def.add_trace(go.Bar(x=x_indices, y=base_df_active['Def_Comp'], name='완전 불량율(%)', marker_color='#1E3A8A', text=base_df_active['Def_Comp'].apply(lambda x: f"{x:.1f}%" if pd.notna(x) and x>0 else ""), textposition='inside', textfont=dict(color='#ffffff', weight='bold'), hovertext=base_df_active['HoverText']))
             fig_def.add_trace(go.Bar(x=x_indices, y=base_df_active['Def_Offset'], name='옵셋 불량율(%)', marker_color='#8B5CF6', text=base_df_active['Def_Offset'].apply(lambda x: f"{x:.1f}%" if pd.notna(x) and x>0 else ""), textposition='inside', textfont=dict(color='#ffffff', weight='bold'), hovertext=base_df_active['HoverText']))
 
-        # 💡 좌측 정렬 타이틀, 상단 여백 확장, 범례 띄우기
+        # 💡 좌하단 여백 확장(l:60, b:60)
         fig_def.update_layout(
             barmode='stack', bargap=0.2, 
             title=dict(text=f"■ DEFECT TREND ({time_range})", font=dict(color='#1e293b', size=16, weight='bold', family="'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif"), x=0.0, xanchor='left'),
             plot_bgcolor='#ffffff', paper_bgcolor='#ffffff',
             font=dict(color='#1e293b', family="'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif"),
             legend=dict(orientation="h", yanchor="bottom", y=1.15, xanchor="right", x=1, font=dict(color='#1e293b', size=12)),
-            margin=dict(l=30, r=30, t=80, b=30), height=380, hovermode='x unified'
+            margin=dict(l=60, r=30, t=80, b=60), height=380, hovermode='x unified'
         )
         
-        # 💡 [X축 명칭 여백(title_standoff) 확대 적용하여 겹침 방지]
+        # 💡 [X축 명칭 여백(title_standoff=40) 대폭 확대 적용하여 겹침 방지]
         if not base_df_active.empty:
-            fig_def.update_xaxes(title_text="도장일 [도장순서]", title_standoff=25, showgrid=False, linecolor='#94a3b8', tickmode='array', tickvals=x_indices, ticktext=x_labels_def, tickfont=dict(color='#1e293b', size=11), title_font=dict(color='#1e293b', size=13))
+            fig_def.update_xaxes(title_text="도장일 [도장순서]", title_standoff=40, showgrid=False, linecolor='#94a3b8', tickmode='array', tickvals=x_indices, ticktext=x_labels_def, tickfont=dict(color='#1e293b', size=11), title_font=dict(color='#1e293b', size=13))
         else:
-            fig_def.update_xaxes(title_text="도장일 [도장순서]", title_standoff=25, showgrid=False, linecolor='#94a3b8', tickfont=dict(color='#1e293b', size=11), title_font=dict(color='#1e293b', size=13))
+            fig_def.update_xaxes(title_text="도장일 [도장순서]", title_standoff=40, showgrid=False, linecolor='#94a3b8', tickfont=dict(color='#1e293b', size=11), title_font=dict(color='#1e293b', size=13))
             
-        fig_def.update_yaxes(title_text="불량율 (%)", tickformat=".1f", showgrid=True, gridcolor='#e2e8f0', linecolor='#94a3b8', tickfont=dict(color='#1e293b', size=11), title_font=dict(color='#1e293b', size=13))
+        # 💡 [Y축 명칭 여백(title_standoff=30) 확대 적용]
+        fig_def.update_yaxes(title_text="불량율 (%)", tickformat=".1f", showgrid=True, gridcolor='#e2e8f0', linecolor='#94a3b8', tickfont=dict(color='#1e293b', size=11), title_font=dict(color='#1e293b', size=13), title_standoff=30)
         st.plotly_chart(fig_def, use_container_width=True, config={'displayModeBar': False}, theme=None)
 
 with col_right:
