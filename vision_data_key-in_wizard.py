@@ -24,9 +24,13 @@ if "current_page" not in st.session_state: st.session_state.current_page = "view
 if "rotate_idx" not in st.session_state: st.session_state.rotate_idx = 0
 if "viewer_authenticated" not in st.session_state: st.session_state.viewer_authenticated = False
 
-# 💡 뷰어 전용 프리미엄 UI (상단 메뉴 숨김 코드 제거 완료)
+# 💡 뷰어 전용 프리미엄 UI 및 강제 라이트 테마 / 메뉴 숨김 처리 CSS
 global_theme_css = """
 <style>
+/* 🚫 Streamlit 기본 상단 헤더, 메뉴, 툴바 완벽 은닉 */
+header[data-testid="stHeader"] { display: none !important; }
+#MainMenu { display: none !important; visibility: hidden !important; }
+[data-testid="stToolbar"] { display: none !important; visibility: hidden !important; }
 footer { display: none !important; } 
 
 /* 🚫 사이드바 및 붕 뜨는 공간 제거 */
@@ -58,6 +62,8 @@ div[data-testid="stButton"] button { height: 2.6rem !important; min-height: 2.6r
 div[data-testid="stButton"] button:hover { background-color: #1e293b !important; color: #ffffff !important; border-color: #1e293b !important; }
 div[data-testid="stButton"] button[kind="primary"] { background-color: #1e293b !important; color: #ffffff !important; border: 1px solid #0f172a !important; }
 div[data-testid="stButton"] button[kind="primary"]:hover { background-color: #0f172a !important; }
+/* 💡 Primary 버튼의 내부 텍스트(p태그) 색상을 흰색으로 강제 고정하여 가독성 복구 */
+div[data-testid="stButton"] button[kind="primary"] p { color: #ffffff !important; }
 </style>
 """
 st.markdown(global_theme_css, unsafe_allow_html=True)
@@ -216,7 +222,7 @@ def load_universal_data():
     return df[final_cols]
 
 # ==========================================
-# 💡 뷰어 전용 로그인 페이지 (돌아가기 버튼 없음)
+# 💡 뷰어 전용 로그인 페이지
 # ==========================================
 if not st.session_state.viewer_authenticated:
     st.markdown("<br><br><br><br><br>", unsafe_allow_html=True)
@@ -248,7 +254,22 @@ if not config:
 if "viewer_time_range" not in st.session_state:
     st.session_state.viewer_time_range = config.get("time_range", "48H")
 
-# 💡 자바스크립트로 수동 회전 버튼을 클릭하게 하는 오토 로테이션 로직
+# 💡 자바스크립트로 30분마다 무조건 데이터 새로고침 (RELOAD 버튼 클릭)
+components.html("""
+<script>
+setTimeout(function() {
+    const btns = window.parent.document.querySelectorAll('button');
+    for(let i=0; i<btns.length; i++){
+        if(btns[i].textContent && btns[i].textContent.includes('RELOAD')){
+            btns[i].click();
+            break;
+        }
+    }
+}, 1800000); 
+</script>
+""", height=0, width=0)
+
+# 💡 자바스크립트로 수동 회전 버튼을 클릭하게 하는 오토 로테이션 로직 (설정된 경우)
 if config.get("auto_rotate_active", False):
     components.html("""
     <script>
@@ -375,24 +396,24 @@ y_t, y_g, y_c, y_f, y_r, y_o = get_qty_metrics(df_yesterday)
 df_6h = base_df_active[base_df_active['DateTime'] >= (now_kst - timedelta(hours=6))].copy() if not base_df_active.empty else pd.DataFrame()
 h_t, h_g, h_c, h_f, h_r, h_o = get_qty_metrics(df_6h)
 
-# 💡 [프리미엄 1단: 텍스트 이중 강제 처리로 가시성 완벽 보장된 KPI 카드]
+# 💡 [프리미엄 1단: KPI 카드 텍스트 색상을 #FFC000로 통일 적용]
 kpi_html = f"""
 <div style="display: flex; justify-content: space-between; gap: 15px; margin-bottom: 20px;">
     <div style="flex: 1; background: linear-gradient(135deg, #000000, #4472C4); padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-        <div style="font-size: 14px; font-weight: bold; opacity: 0.9; color: #ffffff !important;">총 검사 수량</div>
-        <div style="font-size: 28px; font-weight: 900; margin-top: 5px; color: #ffffff !important;">{o_t:,.0f} <span style="font-size: 14px; font-weight: normal; color: #ffffff !important;">EA</span></div>
+        <div style="font-size: 14px; font-weight: bold; opacity: 0.9; color: #FFC000 !important;">총 검사 수량</div>
+        <div style="font-size: 28px; font-weight: 900; margin-top: 5px; color: #FFC000 !important;">{o_t:,.0f} <span style="font-size: 14px; font-weight: normal; color: #FFC000 !important;">EA</span></div>
     </div>
     <div style="flex: 1; background: linear-gradient(135deg, #000000, #4472C4); padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-        <div style="font-size: 14px; font-weight: bold; opacity: 0.9; color: #ffffff !important;">양품 수량</div>
-        <div style="font-size: 28px; font-weight: 900; margin-top: 5px; color: #ffffff !important;">{o_g:,.0f} <span style="font-size: 14px; font-weight: normal; color: #ffffff !important;">EA</span></div>
+        <div style="font-size: 14px; font-weight: bold; opacity: 0.9; color: #FFC000 !important;">양품 수량</div>
+        <div style="font-size: 28px; font-weight: 900; margin-top: 5px; color: #FFC000 !important;">{o_g:,.0f} <span style="font-size: 14px; font-weight: normal; color: #FFC000 !important;">EA</span></div>
     </div>
     <div style="flex: 1; background: linear-gradient(135deg, #000000, #4472C4); padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-        <div style="font-size: 14px; font-weight: bold; opacity: 0.9; color: #ffffff !important;">총 불량 수량</div>
-        <div style="font-size: 28px; font-weight: 900; margin-top: 5px; color: #ffffff !important;">{o_c + o_f + o_r + o_o:,.0f} <span style="font-size: 14px; font-weight: normal; color: #ffffff !important;">EA</span></div>
+        <div style="font-size: 14px; font-weight: bold; opacity: 0.9; color: #FFC000 !important;">총 불량 수량</div>
+        <div style="font-size: 28px; font-weight: 900; margin-top: 5px; color: #FFC000 !important;">{o_c + o_f + o_r + o_o:,.0f} <span style="font-size: 14px; font-weight: normal; color: #FFC000 !important;">EA</span></div>
     </div>
     <div style="flex: 1; background: linear-gradient(135deg, #000000, #4472C4); padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-        <div style="font-size: 14px; font-weight: bold; opacity: 0.9; color: #ffffff !important;">종합 양품율</div>
-        <div style="font-size: 28px; font-weight: 900; margin-top: 5px; color: #ffffff !important;">{(o_g/o_t*100) if o_t > 0 else 0:.1f} <span style="font-size: 14px; font-weight: normal; color: #ffffff !important;">%</span></div>
+        <div style="font-size: 14px; font-weight: bold; opacity: 0.9; color: #FFC000 !important;">종합 양품율</div>
+        <div style="font-size: 28px; font-weight: 900; margin-top: 5px; color: #FFC000 !important;">{(o_g/o_t*100) if o_t > 0 else 0:.1f} <span style="font-size: 14px; font-weight: normal; color: #FFC000 !important;">%</span></div>
     </div>
 </div>
 """
@@ -414,7 +435,6 @@ with col_left:
                 pct = (val / t_ins * 100) if t_ins > 0 else 0
                 txt.append(f"{label}<br>{pct:.1f}%")
                 
-        # 💡 원형 차트 내경(hole) 축소 및 도메인(domain) 여백 확보로 텍스트 짤림 방지 및 깊이감 부여
         fig = go.Figure(data=[go.Pie(
             labels=l, values=v, hole=0.55,
             marker=dict(colors=c, line=dict(color='#ffffff', width=2)),
@@ -432,7 +452,6 @@ with col_left:
         )
         return fig
 
-    # 💡 theme=None을 주입하여 Streamlit의 다크 테마 강제 덮어쓰기 무효화 (글자색 또렷하게 렌더링)
     with st.container(border=True): st.plotly_chart(make_donut_chart(f"OVERALL ({time_range})", o_t, o_g, o_c, o_f, o_r, o_o), use_container_width=True, config={'displayModeBar': False}, theme=None)
     with st.container(border=True): st.plotly_chart(make_donut_chart("YESTERDAY", y_t, y_g, y_c, y_f, y_r, y_o), use_container_width=True, config={'displayModeBar': False}, theme=None)
     with st.container(border=True): st.plotly_chart(make_donut_chart("LAST 6 HOURS", h_t, h_g, h_c, h_f, h_r, h_o), use_container_width=True, config={'displayModeBar': False}, theme=None)
@@ -480,13 +499,13 @@ with col_mid:
                     line=dict(color=c1, width=3, shape='spline'), marker=dict(size=8, color=c1, symbol='diamond'), hovertext=m_df['HoverText']
                 ))
 
-        # 💡 범례(Legend) 폰트 색상을 #1e293b로 강제 지정
+        # 💡 좌측 정렬 타이틀, 상단 여백 확장(t: 80), 범례 띄우기(y: 1.15)
         fig_yld.update_layout(
-            title=dict(text=f"■ YIELD TREND ({time_range})", font=dict(color='#1e293b', size=16, weight='bold', family="'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif")),
+            title=dict(text=f"■ YIELD TREND ({time_range})", font=dict(color='#1e293b', size=16, weight='bold', family="'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif"), x=0.0, xanchor='left'),
             plot_bgcolor='#ffffff', paper_bgcolor='#ffffff',
             font=dict(color='#1e293b', family="'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif"),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(color='#1e293b', size=12)), 
-            margin=dict(l=30, r=30, t=70, b=30), height=380, hovermode='x unified'
+            legend=dict(orientation="h", yanchor="bottom", y=1.15, xanchor="right", x=1, font=dict(color='#1e293b', size=12)), 
+            margin=dict(l=30, r=30, t=80, b=30), height=380, hovermode='x unified'
         )
         
         if not base_df_active.empty:
@@ -496,7 +515,6 @@ with col_mid:
             fig_yld.update_xaxes(showgrid=True, gridcolor='#e2e8f0', linecolor='#94a3b8', tickfont=dict(color='#1e293b', size=11))
             
         fig_yld.update_yaxes(title_text="양품율 (%)", range=[y_min, 100.0], tickformat=".1f", showgrid=True, gridcolor='#e2e8f0', linecolor='#94a3b8', tickfont=dict(color='#1e293b', size=11), title_font=dict(color='#1e293b', size=13))
-        # 💡 theme=None을 주입하여 Streamlit의 다크 테마 강제 덮어쓰기 무효화
         st.plotly_chart(fig_yld, use_container_width=True, config={'displayModeBar': False}, theme=None)
         
     # --- 2-2. DEFECT TREND (Bar Chart) ---
@@ -512,20 +530,20 @@ with col_mid:
             fig_def.add_trace(go.Bar(x=x_indices, y=base_df_active['Def_Comp'], name='완전 불량율(%)', marker_color='#1E3A8A', text=base_df_active['Def_Comp'].apply(lambda x: f"{x:.1f}%" if pd.notna(x) and x>0 else ""), textposition='inside', textfont=dict(color='#ffffff', weight='bold'), hovertext=base_df_active['HoverText']))
             fig_def.add_trace(go.Bar(x=x_indices, y=base_df_active['Def_Offset'], name='옵셋 불량율(%)', marker_color='#8B5CF6', text=base_df_active['Def_Offset'].apply(lambda x: f"{x:.1f}%" if pd.notna(x) and x>0 else ""), textposition='inside', textfont=dict(color='#ffffff', weight='bold'), hovertext=base_df_active['HoverText']))
 
+        # 💡 좌측 정렬 타이틀, 상단 여백 확장(t: 80), 범례 띄우기(y: 1.15)
         fig_def.update_layout(
             barmode='stack', bargap=0.2, 
-            title=dict(text=f"■ DEFECT TREND ({time_range})", font=dict(color='#1e293b', size=16, weight='bold', family="'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif")),
+            title=dict(text=f"■ DEFECT TREND ({time_range})", font=dict(color='#1e293b', size=16, weight='bold', family="'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif"), x=0.0, xanchor='left'),
             plot_bgcolor='#ffffff', paper_bgcolor='#ffffff',
             font=dict(color='#1e293b', family="'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif"),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(color='#1e293b', size=12)),
-            margin=dict(l=30, r=30, t=50, b=30), height=380, hovermode='x unified'
+            legend=dict(orientation="h", yanchor="bottom", y=1.15, xanchor="right", x=1, font=dict(color='#1e293b', size=12)),
+            margin=dict(l=30, r=30, t=80, b=30), height=380, hovermode='x unified'
         )
         
-        # 💡 [글자색 명시적 설정 및 X축 명칭 추가]
         if not base_df_active.empty:
             fig_def.update_xaxes(title_text="도장일 [도장순서]", showgrid=False, linecolor='#94a3b8', tickmode='array', tickvals=x_indices, ticktext=x_labels_def, tickfont=dict(color='#1e293b', size=11), title_font=dict(color='#1e293b', size=13))
         else:
-            fig_def.update_xaxes(title_text="도장일 [도장순서]", showgrid=False, linecolor='#94a3b8', title_font=dict(color='#1e293b', size=13))
+            fig_def.update_xaxes(title_text="도장일 [도장순서]", showgrid=False, linecolor='#94a3b8', tickfont=dict(color='#1e293b', size=11), title_font=dict(color='#1e293b', size=13))
             
         fig_def.update_yaxes(title_text="불량율 (%)", tickformat=".1f", showgrid=True, gridcolor='#e2e8f0', linecolor='#94a3b8', tickfont=dict(color='#1e293b', size=11), title_font=dict(color='#1e293b', size=13))
         st.plotly_chart(fig_def, use_container_width=True, config={'displayModeBar': False}, theme=None)
