@@ -12,6 +12,24 @@ from google.oauth2.service_account import Credentials
 
 st.set_page_config(page_title="VISION DATA VIEWER", layout="wide", initial_sidebar_state="collapsed")
 
+# 💡 이미지 로드 헬퍼 함수
+def get_image_base64(base_name):
+    search_dirs = [os.getcwd(), os.path.dirname(os.path.abspath(__file__))]
+    for directory in search_dirs:
+        if not os.path.exists(directory): continue
+        for file in os.listdir(directory):
+            if file.lower().startswith(base_name.lower()) and file.lower().endswith(('.png', '.jpg', '.jpeg')):
+                filepath = os.path.join(directory, file)
+                try:
+                    with open(filepath, "rb") as img_file:
+                        ext = file.split('.')[-1].lower()
+                        mime_type = "image/jpeg" if ext in ['jpg', 'jpeg'] else "image/png"
+                        encoded = base64.b64encode(img_file.read()).decode('utf-8')
+                        return f"data:{mime_type};base64,{encoded}"
+                except Exception:
+                    pass
+    return None
+
 # 💡 컬러 변환 헬퍼 함수 (Area 차트 반투명 효과용)
 def hex_to_rgba(hex_color, alpha):
     hex_color = hex_color.lstrip('#')
@@ -73,7 +91,10 @@ div[data-testid="stVerticalBlockBorderWrapper"] { background-color: #ffffff !imp
 .live-dot { height: 12px; width: 12px; background-color: #3b82f6; border-radius: 50%; display: inline-block; margin-right: 12px; margin-bottom: 2px; animation: blink 1.5s ease-in-out infinite; }
 
 div[data-testid="stButton"] button { height: 2.6rem !important; min-height: 2.6rem !important; font-size: 1.1rem !important; font-weight: bold !important; border-radius: 8px !important; background-color: #E7E6E6 !important; color: #000000 !important; border: 1px solid #cbd5e1 !important; transition: all 0.2s ease; }
+/* 💡 버튼 Hover 시 p태그(글자색)를 강제 흰색으로 변경 */
 div[data-testid="stButton"] button:hover { background-color: #1e293b !important; color: #ffffff !important; border-color: #1e293b !important; }
+div[data-testid="stButton"] button:hover p { color: #ffffff !important; }
+
 div[data-testid="stButton"] button[kind="primary"] { background-color: #1e293b !important; color: #ffffff !important; border: 1px solid #0f172a !important; }
 div[data-testid="stButton"] button[kind="primary"]:hover { background-color: #0f172a !important; }
 div[data-testid="stButton"] button[kind="primary"] p { color: #ffffff !important; }
@@ -267,67 +288,62 @@ if not config:
 if "viewer_time_range" not in st.session_state:
     st.session_state.viewer_time_range = config.get("time_range", "48H")
 
-# 💡 자바스크립트로 Manage app 배지 2초마다 삭제 & 30분마다 자동 새로고침(Auto-Reload) 적용
-auto_script = """
+# 💡 자바스크립트로 Manage app 배지 2초마다 철저히 삭제 & 30분 자동 새로고침 & 10분 오토 로테이션 적용
+auto_script = f"""
 <script>
-// Manage app 및 각종 배지 제거 로직
-const hideBadges = () => {
+// Manage app 및 각종 배지 제거 로직 (프레임 단위 강제 삭제)
+const hideBadges = () => {{
     const badges = window.parent.document.querySelectorAll('div[class*="viewerBadge"], [data-testid="stAppDeployButton"], .stDeployButton, [data-testid="manage-app-button"]');
-    badges.forEach(b => { 
+    badges.forEach(b => {{ 
         b.style.setProperty('display', 'none', 'important'); 
         b.style.setProperty('visibility', 'hidden', 'important'); 
-    });
-};
+    }});
+    const iframes = window.parent.document.querySelectorAll('iframe');
+    iframes.forEach(f => {{
+        if(f.title && f.title.includes('Deploy')) {{ f.style.setProperty('display', 'none', 'important'); }}
+    }});
+}};
 hideBadges();
-setInterval(hideBadges, 2000); // 주기적으로 스캔하여 철저히 삭제
+setInterval(hideBadges, 2000); 
 
-// 30분(1800000ms) 자동 새로고침
-setTimeout(function() {
+// 30분(1800000ms) 자동 새로고침 (RELOAD 클릭)
+setTimeout(function() {{
     const btns = window.parent.document.querySelectorAll('button');
-    for(let i=0; i<btns.length; i++){
-        if(btns[i].textContent && btns[i].textContent.includes('RELOAD')){
+    for(let i=0; i<btns.length; i++){{
+        if(btns[i].textContent && btns[i].textContent.includes('RELOAD')){{
             btns[i].click();
             break;
-        }
-    }
-}, 1800000); 
+        }}
+    }}
+}}, 1800000); 
+
+// 오토 로테이션 (10분)
+{'setTimeout(function() { const btns = window.parent.document.querySelectorAll("button"); for(let i=0; i<btns.length; i++){ if(btns[i].textContent && btns[i].textContent.includes("Manual Rotate")){ btns[i].click(); break; } } }, 600000);' if config.get("auto_rotate_active", False) else ''}
 </script>
 """
 components.html(auto_script, height=0, width=0)
 
-if config.get("auto_rotate_active", False):
-    components.html("""
-    <script>
-    setTimeout(function() {
-        const btns = window.parent.document.querySelectorAll('button');
-        for(let i=0; i<btns.length; i++){
-            if(btns[i].textContent && btns[i].textContent.includes('Manual Rotate')){
-                btns[i].click();
-                break;
-            }
-        }
-    }, 600000); 
-    </script>
-    """, height=0, width=0)
-
-col1, col2, col3 = st.columns([0.4, 0.45, 0.15])
+# 💡 [상단 네비게이션: 타이틀, 로고, 컨트롤 버튼]
+col1, col2, col3 = st.columns([0.4, 0.35, 0.25])
 with col1:
-    st.markdown(f"<div class='command-header' style='font-size: 1.8rem; margin-top: 5px;'><span class='live-dot'></span>AI DEEP-DIVE COMMAND CENTER</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='command-header' style='font-size: 1.8rem; margin-top: 5px;'><span class='live-dot'></span>AI DEEP-DIVE COMMAND CENTER (VIEWER)</div>", unsafe_allow_html=True)
     st.markdown("<div style='color: #10b981; font-size: 0.85rem; margin-bottom: 15px; font-weight:bold;'>Shared Dashboard (View Only)</div>", unsafe_allow_html=True)
 with col2:
     st.markdown("<br>", unsafe_allow_html=True)
-    vc1, vc2 = st.columns([0.6, 0.4])
+    logo_s_data = get_image_base64("at")
+    if logo_s_data:
+        st.markdown(f"<img src='{logo_s_data}' style='height: 35px; margin-top: -10px;'>", unsafe_allow_html=True)
+with col3:
+    st.markdown("<br>", unsafe_allow_html=True)
+    vc1, vc2 = st.columns(2)
     with vc1:
-        st.session_state.viewer_time_range = st.radio("조회 기간", ["24H", "48H", "72H", "96H"], index=["24H", "48H", "72H", "96H"].index(st.session_state.viewer_time_range), horizontal=True, label_visibility="collapsed", key='v_time_range_radio')
-    with vc2:
         if st.button("🔄 Manual Rotate", use_container_width=True, key="viewer_manual_rotate"):
             st.session_state.rotate_idx += 1
             st.rerun()
-with col3:
-    st.markdown("<br>", unsafe_allow_html=True)
-    if st.button("RELOAD", type="primary", use_container_width=True, key="viewer_reload"):
-        st.cache_data.clear()
-        st.rerun()
+    with vc2:
+        if st.button("RELOAD", type="primary", use_container_width=True, key="viewer_reload"):
+            st.cache_data.clear()
+            st.rerun()
 
 df = load_universal_data().copy()
 if df.empty: 
@@ -378,6 +394,11 @@ if '모델명(MI)' not in df.columns or df['모델명(MI)'].replace('', np.nan).
 now_kst = datetime.now(timezone(timedelta(hours=9))).replace(tzinfo=None)
 target_end_date = now_kst.date() 
 
+# 💡 [라디오 버튼 우측 정렬 배치 (종합 양품율 카드 바로 위)]
+rad_c1, rad_c2 = st.columns([0.75, 0.25])
+with rad_c2:
+    st.session_state.viewer_time_range = st.radio("조회 기간", ["24H", "48H", "72H", "96H"], index=["24H", "48H", "72H", "96H"].index(st.session_state.viewer_time_range), horizontal=True, label_visibility="collapsed", key='v_time_range_radio')
+
 time_range = st.session_state.viewer_time_range
 if time_range == "24H": days_sub = 0
 elif time_range == "48H": days_sub = 1
@@ -397,7 +418,11 @@ if config.get("auto_rotate_active", False) and all_selected:
     active_model = all_selected[current_idx]
     display_std = [active_model] if active_model in display_std else []
     display_inc = [active_model] if active_model in display_inc else []
-    st.markdown(f"<div style='color:#10b981; font-weight:bold; margin-bottom: 10px;'>Auto Rotating: Displaying [{active_model}]</div>", unsafe_allow_html=True)
+    display_model_text = active_model
+else:
+    if not all_selected: display_model_text = "ALL MODELS"
+    elif len(all_selected) == 1: display_model_text = all_selected[0]
+    else: display_model_text = ", ".join(all_selected[:2]) + ("..." if len(all_selected) > 2 else "")
 
 active_models_list = list(set(display_std + display_inc))
 base_df_active = df_target[df_target['모델명(MI)'].isin(active_models_list)].copy() if active_models_list else pd.DataFrame()
@@ -421,9 +446,13 @@ y_t, y_g, y_c, y_f, y_r, y_o = get_qty_metrics(df_yesterday)
 df_6h = base_df_active[base_df_active['DateTime'] >= (now_kst - timedelta(hours=6))].copy() if not base_df_active.empty else pd.DataFrame()
 h_t, h_g, h_c, h_f, h_r, h_o = get_qty_metrics(df_6h)
 
-# 💡 [프리미엄 1단: KPI 전용 클래스로 강제 처리하여 #FFC000 텍스트 완벽 보장]
+# 💡 [프리미엄 1단: 1x5 KPI 레이아웃 적용 (적용 모델 신설 & 강제 클래스 배정)]
 kpi_html = f"""
 <div style="display: flex; justify-content: space-between; gap: 15px; margin-bottom: 20px;">
+    <div style="flex: 1; background: #000000; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+        <div style="font-size: 14px; font-weight: bold; opacity: 0.9; color: #ffffff !important;">적용 모델</div>
+        <div style="font-size: 24px; font-weight: 900; margin-top: 5px; color: #ffffff !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{display_model_text}</div>
+    </div>
     <div class="kpi-card">
         <div style="font-size: 14px; font-weight: bold; opacity: 0.9;">총 검사 수량</div>
         <div style="font-size: 28px; font-weight: 900; margin-top: 5px;">{o_t:,.0f} <span style="font-size: 14px; font-weight: normal;">EA</span></div>
@@ -524,7 +553,6 @@ with col_mid:
                     line=dict(color=c1, width=3, shape='spline'), marker=dict(size=8, color=c1, symbol='diamond'), hovertext=m_df['HoverText']
                 ))
 
-        # 💡 좌측 정렬 타이틀, 상단 여백 확장(t: 80), 좌하단 여백 확장(l:60, b:60)
         fig_yld.update_layout(
             title=dict(text=f"■ YIELD TREND ({time_range})", font=dict(color='#1e293b', size=16, weight='bold', family="'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif"), x=0.0, xanchor='left'),
             plot_bgcolor='#ffffff', paper_bgcolor='#ffffff',
@@ -539,11 +567,10 @@ with col_mid:
         else:
             fig_yld.update_xaxes(showgrid=True, gridcolor='#e2e8f0', linecolor='#94a3b8', tickfont=dict(color='#1e293b', size=11))
             
-        # 💡 [Y축 명칭 여백(title_standoff=30) 적용하여 숫자와 완전히 띄우기]
         fig_yld.update_yaxes(title_text="양품율 (%)", range=[y_min, 100.0], tickformat=".1f", showgrid=True, gridcolor='#e2e8f0', linecolor='#94a3b8', tickfont=dict(color='#1e293b', size=11), title_font=dict(color='#1e293b', size=13), title_standoff=30)
         st.plotly_chart(fig_yld, use_container_width=True, config={'displayModeBar': False}, theme=None)
         
-    # --- 2-2. DEFECT TREND (Bar Chart) ---
+    # --- 2-2. DEFECT TREND ---
     with st.container(border=True):
         fig_def = go.Figure()
         
@@ -556,7 +583,6 @@ with col_mid:
             fig_def.add_trace(go.Bar(x=x_indices, y=base_df_active['Def_Comp'], name='완전 불량율(%)', marker_color='#1E3A8A', text=base_df_active['Def_Comp'].apply(lambda x: f"{x:.1f}%" if pd.notna(x) and x>0 else ""), textposition='inside', textfont=dict(color='#ffffff', weight='bold'), hovertext=base_df_active['HoverText']))
             fig_def.add_trace(go.Bar(x=x_indices, y=base_df_active['Def_Offset'], name='옵셋 불량율(%)', marker_color='#8B5CF6', text=base_df_active['Def_Offset'].apply(lambda x: f"{x:.1f}%" if pd.notna(x) and x>0 else ""), textposition='inside', textfont=dict(color='#ffffff', weight='bold'), hovertext=base_df_active['HoverText']))
 
-        # 💡 좌하단 여백 확장(l:60, b:60)
         fig_def.update_layout(
             barmode='stack', bargap=0.2, 
             title=dict(text=f"■ DEFECT TREND ({time_range})", font=dict(color='#1e293b', size=16, weight='bold', family="'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif"), x=0.0, xanchor='left'),
@@ -572,7 +598,6 @@ with col_mid:
         else:
             fig_def.update_xaxes(title_text="도장일 [도장순서]", title_standoff=40, showgrid=False, linecolor='#94a3b8', tickfont=dict(color='#1e293b', size=11), title_font=dict(color='#1e293b', size=13))
             
-        # 💡 [Y축 명칭 여백(title_standoff=30) 확대 적용]
         fig_def.update_yaxes(title_text="불량율 (%)", tickformat=".1f", showgrid=True, gridcolor='#e2e8f0', linecolor='#94a3b8', tickfont=dict(color='#1e293b', size=11), title_font=dict(color='#1e293b', size=13), title_standoff=30)
         st.plotly_chart(fig_def, use_container_width=True, config={'displayModeBar': False}, theme=None)
 
