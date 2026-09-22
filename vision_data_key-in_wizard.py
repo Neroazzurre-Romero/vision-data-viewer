@@ -20,7 +20,7 @@ def hex_to_rgba(hex_color, alpha):
     rgb = tuple(int(hex_color[i:i+hlen//3], 16) for i in range(0, hlen, hlen//3))
     return f"rgba({rgb[0]},{rgb[1]},{rgb[2]},{alpha})"
 
-# 💡 이미지 로드 헬퍼 함수
+# 💡 이미지 로드 헬퍼 함수 (로그인 페이지 로고용)
 def get_image_base64(base_name):
     try:
         extensions = ['.png', '.jpg', '.jpeg']
@@ -42,7 +42,7 @@ if "current_page" not in st.session_state: st.session_state.current_page = "view
 if "rotate_idx" not in st.session_state: st.session_state.rotate_idx = 0
 if "viewer_authenticated" not in st.session_state: st.session_state.viewer_authenticated = False
 
-# 💡 뷰어 전용 프리미엄 UI 및 [메뉴 숨김 처리 CSS]
+# 💡 뷰어 전용 프리미엄 UI 및 [1차 방어: CSS 숨김 처리]
 global_theme_css = """
 <style>
 /* 🚫 Streamlit 기본 상단 헤더, 메뉴, 툴바 완벽 은닉 */
@@ -58,14 +58,14 @@ body { overscroll-behavior-y: none !important; background-color: #f8fafc !import
 ::-webkit-scrollbar { display: none; }
 .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; padding-left: 1.5rem !important; padding-right: 1.5rem !important; max-width: 98% !important; }
 
-/* 💡 강제 라이트 테마 (UI 텍스트 충돌 방지) */
+/* 💡 강제 라이트 테마 */
 h1, h2, h3, h4, h5, h6, p, label { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif !important; color: #1e293b !important; }
 [data-testid="stAppViewContainer"] { background-color: #f8fafc !important; color: #1e293b !important; }
 div[data-baseweb="input"] > div { background-color: #ffffff !important; border: 1px solid #cbd5e1 !important; }
 div[data-baseweb="input"] input { color: #1e293b !important; font-weight: bold !important; }
 div[data-testid="stRadio"] label, div[data-testid="stRadio"] div { color: #1e293b !important; font-weight: bold !important; cursor: pointer !important; }
 
-/* 💡 라디오 버튼(조회 기간) 우측 끝 정렬 및 줄바꿈 방지(태블릿 대응) */
+/* 💡 라디오 버튼(조회 기간) 우측 끝 정렬 및 줄바꿈 방지 */
 div[data-testid="stRadio"] { display: flex; justify-content: flex-end !important; width: 100%; margin-right: 0px !important; }
 div[role="radiogroup"] { justify-content: flex-end !important; flex-wrap: nowrap !important; gap: 15px !important; }
 div[role="radiogroup"] label { white-space: nowrap !important; }
@@ -87,7 +87,7 @@ div[data-testid="stVerticalBlockBorderWrapper"] { background-color: #ffffff !imp
 @keyframes blink { 0% { opacity: 1; box-shadow: 0 0 10px #3b82f6; } 50% { opacity: 0.3; box-shadow: 0 0 2px #3b82f6; } 100% { opacity: 1; box-shadow: 0 0 10px #3b82f6; } }
 .live-dot { height: 12px; width: 12px; background-color: #3b82f6; border-radius: 50%; display: inline-block; margin-right: 12px; margin-bottom: 2px; animation: blink 1.5s ease-in-out infinite; }
 
-/* 💡 버튼 Hover 시 p태그(글자색)를 강제 흰색으로 변경 (Manual Rotate 대응) */
+/* 💡 버튼 Hover 시 p태그(글자색)를 강제 흰색으로 변경 */
 div[data-testid="stButton"] button { height: 2.6rem !important; min-height: 2.6rem !important; font-size: 1.1rem !important; font-weight: bold !important; border-radius: 8px !important; background-color: #E7E6E6 !important; border: 1px solid #cbd5e1 !important; transition: all 0.2s ease; }
 div[data-testid="stButton"] button p { color: #000000 !important; }
 div[data-testid="stButton"] button:hover { background-color: #1e293b !important; border-color: #1e293b !important; }
@@ -97,6 +97,20 @@ div[data-testid="stButton"] button:hover p { color: #ffffff !important; }
 div[data-testid="stButton"] button[kind="primary"] { background-color: #1e293b !important; border: 1px solid #0f172a !important; }
 div[data-testid="stButton"] button[kind="primary"]:hover { background-color: #0f172a !important; }
 div[data-testid="stButton"] button[kind="primary"] p { color: #ffffff !important; }
+
+/* 🛡️ 2차 방어막: Streamlit 앱 컨테이너 우측 하단 CSS 투명 커버 */
+.stApp::after {
+    content: "" !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    right: 0 !important;
+    width: 250px !important;
+    height: 150px !important;
+    background: transparent !important;
+    z-index: 2147483647 !important;
+    pointer-events: auto !important;
+    cursor: default !important;
+}
 </style>
 """
 st.markdown(global_theme_css, unsafe_allow_html=True)
@@ -292,55 +306,49 @@ if not config:
 if "viewer_time_range" not in st.session_state:
     st.session_state.viewer_time_range = config.get("time_range", "48H")
 
-# 💡 자바스크립트: 뱃지 투명 오버레이 방어막 & 자동 새로고침(30분) & 로테이션(10분)
+# 🛡️ 3차 방어막: [핵폭탄급 투명 방어막(Overlay) 주입 및 강제 클릭 흡수기능]
 auto_script = f"""
 <script>
-const setupBadgeBlocker = () => {{
-    try {{
-        const pDoc = window.parent.document;
-        
-        // 투명한 방어막(Overlay) 생성으로 클릭 원천 차단
-        if (!pDoc.getElementById('badge-blocker')) {{
-            const blocker = pDoc.createElement('div');
-            blocker.id = 'badge-blocker';
-            blocker.style.cssText = 'position:fixed; bottom:0; right:0; width:150px; height:150px; background:rgba(255,255,255,0.001); z-index:999999999; cursor:default;';
-            blocker.addEventListener('click', (e) => {{ e.stopPropagation(); e.preventDefault(); }}, true);
-            pDoc.body.appendChild(blocker);
-        }}
+const nukeManageApp = () => {{
+    let docs = [document];
+    // 모든 부모 프레임 추적 (CORS 허용 범위 내에서 최대한 접근)
+    try {{ if (window.parent && window.parent.document) docs.push(window.parent.document); }} catch(e){{}}
+    try {{ if (window.top && window.top.document && window.top !== window.parent) docs.push(window.top.document); }} catch(e){{}}
 
-        // 시각적 뱃지 제거 CSS 강제 주입
-        if (!pDoc.getElementById('nuke-css')) {{
-            const style = pDoc.createElement('style');
-            style.id = 'nuke-css';
-            style.innerHTML = `
-                [data-testid="manage-app-button"],
-                [data-testid="stAppDeployButton"],
-                .stDeployButton,
-                div[class^="viewerBadge"],
-                div[class*="viewerBadge"],
-                #creatorBadge,
-                .creatorBadge_container {{
-                    display: none !important;
-                    opacity: 0 !important;
-                    visibility: hidden !important;
-                    pointer-events: none !important;
-                }}
-            `;
-            pDoc.head.appendChild(style);
-        }}
-        
-        // 텍스트 추적 제거
-        const els = pDoc.querySelectorAll('div, a, button, span');
-        els.forEach(el => {{
-            if (el.textContent && (el.textContent.includes('< Manage app') || el.textContent.includes('View profile'))) {{
+    docs.forEach(doc => {{
+        try {{
+            // 1. 방해 요소 강제 숨김 처리
+            const selectors = '[data-testid="manage-app-button"], [data-testid="stAppDeployButton"], .stDeployButton, div[class^="viewerBadge"], div[class*="viewerBadge"], #creatorBadge, a[href*="streamlit.io/cloud"]';
+            doc.querySelectorAll(selectors).forEach(el => {{
                 el.style.setProperty('display', 'none', 'important');
-                if(el.parentElement) el.parentElement.style.setProperty('display', 'none', 'important');
+                el.style.setProperty('pointer-events', 'none', 'important');
+            }});
+            
+            // 2. 텍스트 스캔으로 '< Manage app' 및 'View profile' 텍스트 찾아 부모까지 박멸
+            doc.querySelectorAll('div, a, button, span').forEach(el => {{
+                if (el.textContent && (el.textContent.includes('< Manage app') || el.textContent.includes('View profile'))) {{
+                    el.style.setProperty('display', 'none', 'important');
+                    if (el.parentElement) el.parentElement.style.setProperty('display', 'none', 'important');
+                }}
+            }});
+
+            // 3. 궁극의 물리적 투명 방어막 설치 (화면 우측 하단 300px * 150px 영역 절대 클릭 불가 상태로 만듦)
+            if (!doc.getElementById('ultimate-blocker-shield')) {{
+                const blocker = doc.createElement('div');
+                blocker.id = 'ultimate-blocker-shield';
+                blocker.style.cssText = 'position:fixed !important; bottom:0 !important; right:0 !important; width:300px !important; height:150px !important; background:transparent !important; z-index:2147483647 !important; cursor:default !important; pointer-events:auto !important;';
+                
+                // 마우스 클릭 및 터치 이벤트 흡수 (블랙홀)
+                const killEvent = (e) => {{ e.stopPropagation(); e.preventDefault(); return false; }};
+                ['click', 'mousedown', 'mouseup', 'pointerdown', 'touchstart'].forEach(ev => blocker.addEventListener(ev, killEvent, true));
+                
+                doc.body.appendChild(blocker);
             }}
-        }});
-    }} catch (e) {{}}
+        }} catch(e) {{}}
+    }});
 }};
-setupBadgeBlocker();
-setInterval(setupBadgeBlocker, 1000); 
+nukeManageApp();
+setInterval(nukeManageApp, 100); // 0.1초마다 스캔하여 절대 나타나지 않게 감시
 
 // 30분(1800000ms) 자동 새로고침 (RELOAD 클릭)
 setTimeout(function() {{
@@ -376,7 +384,7 @@ with col2:
             st.cache_data.clear()
             st.rerun()
 
-# 💡 [라디오 버튼 완벽 우측 정렬 유지: 80% / 20% 분할]
+# 💡 [라디오 버튼 완벽 우측 정렬 배치: 80% / 20% 분할]
 rad_c1, rad_c2 = st.columns([0.8, 0.2])
 with rad_c2:
     options_list = ["6H", "24H", "48H", "72H", "96H"]
