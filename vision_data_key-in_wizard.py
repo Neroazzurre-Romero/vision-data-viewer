@@ -24,7 +24,7 @@ if "current_page" not in st.session_state: st.session_state.current_page = "view
 if "rotate_idx" not in st.session_state: st.session_state.rotate_idx = 0
 if "viewer_authenticated" not in st.session_state: st.session_state.viewer_authenticated = False
 
-# 💡 뷰어 전용 프리미엄 UI 및 [강제 라이트 테마 & 메뉴 숨김 처리 CSS]
+# 💡 뷰어 전용 프리미엄 UI 및 [강제 라이트 테마 & 메뉴 숨김 처리 CSS 수정]
 global_theme_css = """
 <style>
 /* 🚫 Streamlit 기본 상단 헤더, 메뉴, 툴바 완벽 은닉 */
@@ -40,8 +40,9 @@ body { overscroll-behavior-y: none !important; background-color: #f8fafc !import
 ::-webkit-scrollbar { display: none; }
 .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; padding-left: 1.5rem !important; padding-right: 1.5rem !important; max-width: 98% !important; }
 
-/* 💡 강제 라이트 테마 (모든 텍스트를 어둡게, 배경을 밝게 강제 고정) */
-h1, h2, h3, h4, h5, h6, p, div, span, label { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif !important; color: #1e293b !important; }
+/* 💡 강제 라이트 테마 (폰트 통일 및 특정 태그만 어둡게 강제 고정하여 충돌 방지) */
+h1, h2, h3, h4, h5, h6, p, div, span, label { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif !important; }
+h1, h2, h3, h4, h5, h6, p, label { color: #1e293b !important; }
 [data-testid="stAppViewContainer"] { background-color: #f8fafc !important; color: #1e293b !important; }
 div[data-baseweb="input"] > div { background-color: #ffffff !important; border: 1px solid #cbd5e1 !important; }
 div[data-baseweb="input"] input { color: #1e293b !important; font-weight: bold !important; }
@@ -171,7 +172,6 @@ def load_universal_data():
     df = df.rename(columns=rename_dict)
     ext_cols = EXCEL_COLUMNS + ['옵셋불량율']
     
-    # 💡 [KeyError 원천 차단] 누락된 열이 있으면 강제 생성하여 인덱스 에러 방지
     for col in ext_cols:
         if col not in df.columns: df[col] = ""
         
@@ -213,7 +213,6 @@ def load_universal_data():
         df_filtered = df[df['구분'].fillna('').astype(str).str.contains('1차', na=False)]
         if not df_filtered.empty: df = df_filtered
         
-    # 💡 반환 전 누락 방지 최종 점검 (KeyError 방어선)
     final_cols = ext_cols + ['DateTime', 'DateOnly']
     for c in final_cols:
         if c not in df.columns:
@@ -254,7 +253,6 @@ if not config:
 if "viewer_time_range" not in st.session_state:
     st.session_state.viewer_time_range = config.get("time_range", "48H")
 
-# 💡 자바스크립트로 수동 회전 버튼을 클릭하게 하는 오토 로테이션 로직
 if config.get("auto_rotate_active", False):
     components.html("""
     <script>
@@ -278,7 +276,6 @@ with col2:
     st.markdown("<br>", unsafe_allow_html=True)
     vc1, vc2 = st.columns([0.6, 0.4])
     with vc1:
-        # 💡 24H 옵션 추가 적용
         st.session_state.viewer_time_range = st.radio("조회 기간", ["24H", "48H", "72H", "96H"], index=["24H", "48H", "72H", "96H"].index(st.session_state.viewer_time_range), horizontal=True, label_visibility="collapsed", key='v_time_range_radio')
     with vc2:
         if st.button("🔄 Manual Rotate", use_container_width=True, key="viewer_manual_rotate"):
@@ -382,30 +379,29 @@ y_t, y_g, y_c, y_f, y_r, y_o = get_qty_metrics(df_yesterday)
 df_6h = base_df_active[base_df_active['DateTime'] >= (now_kst - timedelta(hours=6))].copy() if not base_df_active.empty else pd.DataFrame()
 h_t, h_g, h_c, h_f, h_r, h_o = get_qty_metrics(df_6h)
 
-# 💡 [프리미엄 1단: 상단 그라데이션 통합 KPI 카드 (블랙 -> 블루)]
+# 💡 [프리미엄 1단: 텍스트 이중 강제 처리로 가시성 완벽 보장된 KPI 카드]
 kpi_html = f"""
 <div style="display: flex; justify-content: space-between; gap: 15px; margin-bottom: 20px;">
-    <div style="flex: 1; background: linear-gradient(135deg, #000000, #4472C4); color: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-        <div style="font-size: 14px; font-weight: bold; opacity: 0.9;">총 검사 수량</div>
-        <div style="font-size: 28px; font-weight: 900; margin-top: 5px;">{o_t:,.0f} <span style="font-size: 14px; font-weight: normal;">EA</span></div>
+    <div style="flex: 1; background: linear-gradient(135deg, #000000, #4472C4); padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+        <div style="font-size: 14px; font-weight: bold; opacity: 0.9; color: #ffffff !important;">총 검사 수량</div>
+        <div style="font-size: 28px; font-weight: 900; margin-top: 5px; color: #ffffff !important;">{o_t:,.0f} <span style="font-size: 14px; font-weight: normal; color: #ffffff !important;">EA</span></div>
     </div>
-    <div style="flex: 1; background: linear-gradient(135deg, #000000, #4472C4); color: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-        <div style="font-size: 14px; font-weight: bold; opacity: 0.9;">양품 수량</div>
-        <div style="font-size: 28px; font-weight: 900; margin-top: 5px;">{o_g:,.0f} <span style="font-size: 14px; font-weight: normal;">EA</span></div>
+    <div style="flex: 1; background: linear-gradient(135deg, #000000, #4472C4); padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+        <div style="font-size: 14px; font-weight: bold; opacity: 0.9; color: #ffffff !important;">양품 수량</div>
+        <div style="font-size: 28px; font-weight: 900; margin-top: 5px; color: #ffffff !important;">{o_g:,.0f} <span style="font-size: 14px; font-weight: normal; color: #ffffff !important;">EA</span></div>
     </div>
-    <div style="flex: 1; background: linear-gradient(135deg, #000000, #4472C4); color: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-        <div style="font-size: 14px; font-weight: bold; opacity: 0.9;">총 불량 수량</div>
-        <div style="font-size: 28px; font-weight: 900; margin-top: 5px;">{o_c + o_f + o_r + o_o:,.0f} <span style="font-size: 14px; font-weight: normal;">EA</span></div>
+    <div style="flex: 1; background: linear-gradient(135deg, #000000, #4472C4); padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+        <div style="font-size: 14px; font-weight: bold; opacity: 0.9; color: #ffffff !important;">총 불량 수량</div>
+        <div style="font-size: 28px; font-weight: 900; margin-top: 5px; color: #ffffff !important;">{o_c + o_f + o_r + o_o:,.0f} <span style="font-size: 14px; font-weight: normal; color: #ffffff !important;">EA</span></div>
     </div>
-    <div style="flex: 1; background: linear-gradient(135deg, #000000, #4472C4); color: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-        <div style="font-size: 14px; font-weight: bold; opacity: 0.9;">종합 양품율</div>
-        <div style="font-size: 28px; font-weight: 900; margin-top: 5px;">{(o_g/o_t*100) if o_t > 0 else 0:.1f} <span style="font-size: 14px; font-weight: normal;">%</span></div>
+    <div style="flex: 1; background: linear-gradient(135deg, #000000, #4472C4); padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+        <div style="font-size: 14px; font-weight: bold; opacity: 0.9; color: #ffffff !important;">종합 양품율</div>
+        <div style="font-size: 28px; font-weight: 900; margin-top: 5px; color: #ffffff !important;">{(o_g/o_t*100) if o_t > 0 else 0:.1f} <span style="font-size: 14px; font-weight: normal; color: #ffffff !important;">%</span></div>
     </div>
 </div>
 """
 st.markdown(kpi_html, unsafe_allow_html=True)
 
-# 💡 [프리미엄 3단 분할 레이아웃: 좌측(도넛) / 중앙(트렌드) / 우측(알람)]
 col_left, col_mid, col_right = st.columns([0.22, 0.56, 0.22])
 
 with col_left:
@@ -422,7 +418,6 @@ with col_left:
                 pct = (val / t_ins * 100) if t_ins > 0 else 0
                 txt.append(f"{label}<br>{pct:.1f}%")
                 
-        # 💡 원형 차트 내경(hole) 축소 및 도메인(domain) 여백 확보로 텍스트 짤림 방지 및 깊이감 부여
         fig = go.Figure(data=[go.Pie(
             labels=l, values=v, hole=0.55,
             marker=dict(colors=c, line=dict(color='#ffffff', width=2)),
@@ -456,7 +451,7 @@ with col_mid:
         base_df_active['LOT NO.'] = base_df_active.get('LOT NO.', pd.Series(['UNKNOWN']*len(base_df_active))).apply(clean_lot)
         base_df_active['HoverText'] = base_df_active.apply(lambda r: f"[{r.get('모델명(MI)', '')}]<br>Time: {r['DateTime'].strftime('%Y-%m-%d %H:%M')}<br>LOT: {r['LOT NO.']}", axis=1)
 
-    # --- 2-1. YIELD TREND (부드러운 곡선 Area Chart) ---
+    # --- 2-1. YIELD TREND ---
     with st.container(border=True):
         fig_yld = go.Figure()
         y_min = 50.0
@@ -495,14 +490,14 @@ with col_mid:
             margin=dict(l=30, r=30, t=70, b=30), height=380, hovermode='x unified'
         )
         
+        # 💡 [글자색 명시적 설정: tickfont, titlefont 적용]
         if not base_df_active.empty:
             x_labels_yld = [r['DateTime'].strftime('%m-%d %H:%M') for _, r in base_df_active.iterrows()]
-            fig_yld.update_xaxes(showgrid=True, gridcolor='#e2e8f0', linecolor='#cbd5e1', tickmode='array', tickvals=base_df_active.index, ticktext=x_labels_yld)
+            fig_yld.update_xaxes(showgrid=True, gridcolor='#e2e8f0', linecolor='#94a3b8', tickmode='array', tickvals=base_df_active.index, ticktext=x_labels_yld, tickfont=dict(color='#1e293b', size=11))
         else:
-            fig_yld.update_xaxes(showgrid=True, gridcolor='#e2e8f0', linecolor='#cbd5e1')
+            fig_yld.update_xaxes(showgrid=True, gridcolor='#e2e8f0', linecolor='#94a3b8')
             
-        # 💡 Y축 최대값을 100.0%로 고정하고 .0 포맷 강제 적용
-        fig_yld.update_yaxes(title_text="양품율 (%)", range=[y_min, 100.0], tickformat=".1f", showgrid=True, gridcolor='#e2e8f0', linecolor='#cbd5e1')
+        fig_yld.update_yaxes(title_text="양품율 (%)", range=[y_min, 100.0], tickformat=".1f", showgrid=True, gridcolor='#e2e8f0', linecolor='#94a3b8', tickfont=dict(color='#1e293b', size=11), title_font=dict(color='#1e293b', size=13))
         st.plotly_chart(fig_yld, use_container_width=True, config={'displayModeBar': False})
         
     # --- 2-2. DEFECT TREND (Bar Chart) ---
@@ -527,14 +522,13 @@ with col_mid:
             margin=dict(l=30, r=30, t=50, b=30), height=380, hovermode='x unified'
         )
         
-        # 💡 X축 명칭 추가
+        # 💡 [글자색 명시적 설정 및 X축 명칭 추가]
         if not base_df_active.empty:
-            fig_def.update_xaxes(title_text="도장일 [도장순서]", showgrid=False, linecolor='#cbd5e1', tickmode='array', tickvals=x_indices, ticktext=x_labels_def)
+            fig_def.update_xaxes(title_text="도장일 [도장순서]", showgrid=False, linecolor='#94a3b8', tickmode='array', tickvals=x_indices, ticktext=x_labels_def, tickfont=dict(color='#1e293b', size=11), title_font=dict(color='#1e293b', size=13))
         else:
-            fig_def.update_xaxes(title_text="도장일 [도장순서]", showgrid=False, linecolor='#cbd5e1')
+            fig_def.update_xaxes(title_text="도장일 [도장순서]", showgrid=False, linecolor='#94a3b8', title_font=dict(color='#1e293b', size=13))
             
-        # 💡 Y축 .0 포맷 강제 적용
-        fig_def.update_yaxes(title_text="불량율 (%)", tickformat=".1f", showgrid=True, gridcolor='#e2e8f0', linecolor='#cbd5e1')
+        fig_def.update_yaxes(title_text="불량율 (%)", tickformat=".1f", showgrid=True, gridcolor='#e2e8f0', linecolor='#94a3b8', tickfont=dict(color='#1e293b', size=11), title_font=dict(color='#1e293b', size=13))
         st.plotly_chart(fig_def, use_container_width=True, config={'displayModeBar': False})
 
 with col_right:
