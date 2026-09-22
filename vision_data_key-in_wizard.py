@@ -10,6 +10,7 @@ import streamlit.components.v1 as components
 import gspread
 from google.oauth2.service_account import Credentials
 
+# 💡 페이지 기본 메뉴 및 레이아웃 설정
 st.set_page_config(page_title="VISION DATA VIEWER", layout="wide", initial_sidebar_state="collapsed")
 
 # 💡 컬러 변환 헬퍼 함수 (Area 차트 반투명 효과용)
@@ -19,15 +20,21 @@ def hex_to_rgba(hex_color, alpha):
     rgb = tuple(int(hex_color[i:i+hlen//3], 16) for i in range(0, hlen, hlen//3))
     return f"rgba({rgb[0]},{rgb[1]},{rgb[2]},{alpha})"
 
-# 💡 뷰어 전용 상태 초기화 (메인 시스템 로직 모두 제거)
+# 💡 뷰어 전용 상태 초기화
 if "current_page" not in st.session_state: st.session_state.current_page = "viewer"
 if "rotate_idx" not in st.session_state: st.session_state.rotate_idx = 0
 if "viewer_authenticated" not in st.session_state: st.session_state.viewer_authenticated = False
 
-# 💡 뷰어 전용 프리미엄 UI 및 숨김 처리 CSS
+# 💡 뷰어 전용 프리미엄 UI 및 [상단 기본 메뉴 완벽 숨김 처리]
 global_theme_css = """
 <style>
+/* 🚫 Streamlit 기본 상단 헤더, 메뉴, 툴바 완벽 은닉 (Share, GitHub 고양이, 별표, 더보기 등) */
+header[data-testid="stHeader"] { display: none !important; }
+#MainMenu { display: none !important; visibility: hidden !important; }
+[data-testid="stToolbar"] { display: none !important; visibility: hidden !important; }
 footer { display: none !important; } 
+
+/* 🚫 사이드바 및 붕 뜨는 공간 제거 */
 [data-testid="collapsedControl"] { display: none !important; pointer-events: none !important; }
 [data-testid="stSidebar"] { display: none !important; }
 body { overscroll-behavior-y: none !important; } 
@@ -211,7 +218,8 @@ if not st.session_state.viewer_authenticated:
             st.markdown("<div style='text-align:center; color:#64748b; margin-bottom:20px; font-weight:bold;'>공유된 대시보드를 확인하려면 비밀번호를 입력하세요.</div>", unsafe_allow_html=True)
             pwd = st.text_input("비밀번호", type="password", label_visibility="collapsed", placeholder="비밀번호 입력", key="viewer_pwd")
             st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("✅ 확인", type="primary", use_container_width=True, key="viewer_confirm"):
+            # 💡 돌아가기 버튼을 제거하여 이 화면을 벗어날 수 없게 막음
+            if st.button("✅ 접속", type="primary", use_container_width=True, key="viewer_confirm"):
                 if pwd == "7777":
                     st.session_state.viewer_authenticated = True
                     st.rerun()
