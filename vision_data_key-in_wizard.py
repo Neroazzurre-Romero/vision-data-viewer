@@ -19,12 +19,12 @@ def hex_to_rgba(hex_color, alpha):
     rgb = tuple(int(hex_color[i:i+hlen//3], 16) for i in range(0, hlen, hlen//3))
     return f"rgba({rgb[0]},{rgb[1]},{rgb[2]},{alpha})"
 
-# 💡 뷰어 전용 상태 초기화 (메인 시스템 로직 모두 제거)
+# 💡 뷰어 전용 상태 초기화
 if "current_page" not in st.session_state: st.session_state.current_page = "viewer"
 if "rotate_idx" not in st.session_state: st.session_state.rotate_idx = 0
 if "viewer_authenticated" not in st.session_state: st.session_state.viewer_authenticated = False
 
-# 💡 뷰어 전용 프리미엄 UI 및 [상단 기본 메뉴 완벽 숨김 처리]
+# 💡 뷰어 전용 프리미엄 UI 및 [강제 라이트 테마 & 메뉴 숨김 처리 CSS]
 global_theme_css = """
 <style>
 /* 🚫 Streamlit 기본 상단 헤더, 메뉴, 툴바 완벽 은닉 */
@@ -36,12 +36,16 @@ footer { display: none !important; }
 /* 🚫 사이드바 및 붕 뜨는 공간 제거 */
 [data-testid="collapsedControl"] { display: none !important; pointer-events: none !important; }
 [data-testid="stSidebar"] { display: none !important; }
-body { overscroll-behavior-y: none !important; } 
+body { overscroll-behavior-y: none !important; background-color: #f8fafc !important; } 
 ::-webkit-scrollbar { display: none; }
 .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; padding-left: 1.5rem !important; padding-right: 1.5rem !important; max-width: 98% !important; }
 
-h1, h2, h3, h4, h5, h6, p, div, span, label { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif !important; }
+/* 💡 강제 라이트 테마 (모든 텍스트를 어둡게, 배경을 밝게 강제 고정) */
+h1, h2, h3, h4, h5, h6, p, div, span, label { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif !important; color: #1e293b !important; }
 [data-testid="stAppViewContainer"] { background-color: #f8fafc !important; color: #1e293b !important; }
+div[data-baseweb="input"] > div { background-color: #ffffff !important; border: 1px solid #cbd5e1 !important; }
+div[data-baseweb="input"] input { color: #1e293b !important; font-weight: bold !important; }
+div[data-testid="stRadio"] label { color: #1e293b !important; font-weight: bold !important; cursor: pointer !important; }
 
 div[data-testid="stVerticalBlockBorderWrapper"] { background-color: #ffffff !important; border-radius: 12px !important; border: 1px solid #e2e8f0 !important; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03) !important; padding: 1.5rem !important; margin-bottom: 0.8rem !important; }
 .command-header { color: #1e293b !important; font-weight: 900 !important; letter-spacing: 1px; }
@@ -58,7 +62,6 @@ div[data-testid="stButton"] button { height: 2.6rem !important; min-height: 2.6r
 div[data-testid="stButton"] button:hover { background-color: #1e293b !important; color: #ffffff !important; border-color: #1e293b !important; }
 div[data-testid="stButton"] button[kind="primary"] { background-color: #1e293b !important; color: #ffffff !important; border: 1px solid #0f172a !important; }
 div[data-testid="stButton"] button[kind="primary"]:hover { background-color: #0f172a !important; }
-div[data-testid="stRadio"] label { color: #1e293b !important; font-weight: bold !important; cursor: pointer !important; }
 </style>
 """
 st.markdown(global_theme_css, unsafe_allow_html=True)
@@ -103,15 +106,16 @@ def load_shared_config():
 @st.cache_data(ttl=15)
 def load_universal_data():
     doc = get_spreadsheet_doc()
-    if doc is None: return pd.DataFrame()
+    if doc is None: return pd.DataFrame(columns=EXCEL_COLUMNS + ['_sheet_row', 'DateTime', 'DateOnly'])
     try:
         ws = doc.worksheet(TAB_NAME)
         raw_data = ws.get_all_values()
     except Exception as e:
         st.error(f"🚨 '{TAB_NAME}' 시트 접근 에러: {e}")
-        return pd.DataFrame()
+        return pd.DataFrame(columns=EXCEL_COLUMNS + ['_sheet_row', 'DateTime', 'DateOnly'])
     
-    if len(raw_data) < 24: return pd.DataFrame()
+    if len(raw_data) < 24: 
+        return pd.DataFrame(columns=EXCEL_COLUMNS + ['_sheet_row', 'DateTime', 'DateOnly'])
     
     header_idx = 22
     data_start_idx = 23
@@ -166,6 +170,8 @@ def load_universal_data():
 
     df = df.rename(columns=rename_dict)
     ext_cols = EXCEL_COLUMNS + ['옵셋불량율']
+    
+    # 💡 [KeyError 원천 차단] 누락된 열이 있으면 강제 생성하여 인덱스 에러 방지
     for col in ext_cols:
         if col not in df.columns: df[col] = ""
         
@@ -192,18 +198,28 @@ def load_universal_data():
         except: pass
         return datetime(2026, 1, 1) 
         
-    parsed_dates = df.apply(parse_dt, axis=1)
-    missing_dates_idx = parsed_dates.isna()
-    if missing_dates_idx.any():
-        parsed_dates.loc[missing_dates_idx] = [datetime(2026, 1, 1) + timedelta(minutes=i) for i in range(missing_dates_idx.sum())]
-    df['DateTime'] = pd.to_datetime(parsed_dates)
-    df['DateOnly'] = df['DateTime'].dt.date 
+    if df.empty:
+        df['DateTime'] = pd.to_datetime([])
+        df['DateOnly'] = []
+    else:
+        parsed_dates = df.apply(parse_dt, axis=1)
+        missing_dates_idx = parsed_dates.isna()
+        if missing_dates_idx.any():
+            parsed_dates.loc[missing_dates_idx] = [datetime(2026, 1, 1) + timedelta(minutes=i) for i in range(missing_dates_idx.sum())]
+        df['DateTime'] = pd.to_datetime(parsed_dates)
+        df['DateOnly'] = df['DateTime'].dt.date 
 
     if '구분' in df.columns:
         df_filtered = df[df['구분'].fillna('').astype(str).str.contains('1차', na=False)]
         if not df_filtered.empty: df = df_filtered
         
-    return df[ext_cols + ['_sheet_row', 'DateTime', 'DateOnly']]
+    # 💡 반환 전 누락 방지 최종 점검 (KeyError 방어선)
+    final_cols = ext_cols + ['DateTime', 'DateOnly']
+    for c in final_cols:
+        if c not in df.columns:
+            df[c] = None
+            
+    return df[final_cols]
 
 # ==========================================
 # 💡 뷰어 전용 로그인 페이지 (돌아가기 버튼 없음)
@@ -238,6 +254,7 @@ if not config:
 if "viewer_time_range" not in st.session_state:
     st.session_state.viewer_time_range = config.get("time_range", "48H")
 
+# 💡 자바스크립트로 수동 회전 버튼을 클릭하게 하는 오토 로테이션 로직
 if config.get("auto_rotate_active", False):
     components.html("""
     <script>
@@ -261,7 +278,7 @@ with col2:
     st.markdown("<br>", unsafe_allow_html=True)
     vc1, vc2 = st.columns([0.6, 0.4])
     with vc1:
-        # 💡 조회 기간에 24H 옵션 추가
+        # 💡 24H 옵션 추가 적용
         st.session_state.viewer_time_range = st.radio("조회 기간", ["24H", "48H", "72H", "96H"], index=["24H", "48H", "72H", "96H"].index(st.session_state.viewer_time_range), horizontal=True, label_visibility="collapsed", key='v_time_range_radio')
     with vc2:
         if st.button("🔄 Manual Rotate", use_container_width=True, key="viewer_manual_rotate"):
@@ -323,7 +340,6 @@ now_kst = datetime.now(timezone(timedelta(hours=9))).replace(tzinfo=None)
 target_end_date = now_kst.date() 
 
 time_range = st.session_state.viewer_time_range
-# 💡 기간 필터링 로직에 24H 추가
 if time_range == "24H": days_sub = 0
 elif time_range == "48H": days_sub = 1
 elif time_range == "72H": days_sub = 2
