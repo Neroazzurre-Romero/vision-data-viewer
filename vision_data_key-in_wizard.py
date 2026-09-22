@@ -24,7 +24,7 @@ if "current_page" not in st.session_state: st.session_state.current_page = "view
 if "rotate_idx" not in st.session_state: st.session_state.rotate_idx = 0
 if "viewer_authenticated" not in st.session_state: st.session_state.viewer_authenticated = False
 
-# 💡 뷰어 전용 프리미엄 UI 및 [강제 라이트 테마 & 메뉴 숨김 처리 CSS 수정]
+# 💡 뷰어 전용 프리미엄 UI 및 [강제 라이트 테마 & 메뉴 숨김 처리 CSS]
 global_theme_css = """
 <style>
 /* 🚫 Streamlit 기본 상단 헤더, 메뉴, 툴바 완벽 은닉 */
@@ -40,13 +40,12 @@ body { overscroll-behavior-y: none !important; background-color: #f8fafc !import
 ::-webkit-scrollbar { display: none; }
 .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; padding-left: 1.5rem !important; padding-right: 1.5rem !important; max-width: 98% !important; }
 
-/* 💡 강제 라이트 테마 (폰트 통일 및 특정 태그만 어둡게 강제 고정하여 충돌 방지) */
-h1, h2, h3, h4, h5, h6, p, div, span, label { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif !important; }
-h1, h2, h3, h4, h5, h6, p, label { color: #1e293b !important; }
+/* 💡 강제 라이트 테마 (UI 텍스트 충돌 방지) */
+h1, h2, h3, h4, h5, h6, p, label { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif !important; color: #1e293b !important; }
 [data-testid="stAppViewContainer"] { background-color: #f8fafc !important; color: #1e293b !important; }
 div[data-baseweb="input"] > div { background-color: #ffffff !important; border: 1px solid #cbd5e1 !important; }
 div[data-baseweb="input"] input { color: #1e293b !important; font-weight: bold !important; }
-div[data-testid="stRadio"] label { color: #1e293b !important; font-weight: bold !important; cursor: pointer !important; }
+div[data-testid="stRadio"] label, div[data-testid="stRadio"] div { color: #1e293b !important; font-weight: bold !important; cursor: pointer !important; }
 
 div[data-testid="stVerticalBlockBorderWrapper"] { background-color: #ffffff !important; border-radius: 12px !important; border: 1px solid #e2e8f0 !important; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03) !important; padding: 1.5rem !important; margin-bottom: 0.8rem !important; }
 .command-header { color: #1e293b !important; font-weight: 900 !important; letter-spacing: 1px; }
@@ -253,6 +252,7 @@ if not config:
 if "viewer_time_range" not in st.session_state:
     st.session_state.viewer_time_range = config.get("time_range", "48H")
 
+# 💡 자바스크립트로 수동 회전 버튼을 클릭하게 하는 오토 로테이션 로직
 if config.get("auto_rotate_active", False):
     components.html("""
     <script>
@@ -276,6 +276,7 @@ with col2:
     st.markdown("<br>", unsafe_allow_html=True)
     vc1, vc2 = st.columns([0.6, 0.4])
     with vc1:
+        # 💡 24H 옵션 추가 적용
         st.session_state.viewer_time_range = st.radio("조회 기간", ["24H", "48H", "72H", "96H"], index=["24H", "48H", "72H", "96H"].index(st.session_state.viewer_time_range), horizontal=True, label_visibility="collapsed", key='v_time_range_radio')
     with vc2:
         if st.button("🔄 Manual Rotate", use_container_width=True, key="viewer_manual_rotate"):
@@ -337,6 +338,7 @@ now_kst = datetime.now(timezone(timedelta(hours=9))).replace(tzinfo=None)
 target_end_date = now_kst.date() 
 
 time_range = st.session_state.viewer_time_range
+# 💡 기간 필터링 로직에 24H 추가
 if time_range == "24H": days_sub = 0
 elif time_range == "48H": days_sub = 1
 elif time_range == "72H": days_sub = 2
@@ -418,6 +420,7 @@ with col_left:
                 pct = (val / t_ins * 100) if t_ins > 0 else 0
                 txt.append(f"{label}<br>{pct:.1f}%")
                 
+        # 💡 원형 차트 내경(hole) 축소 및 도메인(domain) 여백 확보로 텍스트 짤림 방지 및 깊이감 부여
         fig = go.Figure(data=[go.Pie(
             labels=l, values=v, hole=0.55,
             marker=dict(colors=c, line=dict(color='#ffffff', width=2)),
@@ -435,9 +438,10 @@ with col_left:
         )
         return fig
 
-    with st.container(border=True): st.plotly_chart(make_donut_chart(f"OVERALL ({time_range})", o_t, o_g, o_c, o_f, o_r, o_o), use_container_width=True, config={'displayModeBar': False})
-    with st.container(border=True): st.plotly_chart(make_donut_chart("YESTERDAY", y_t, y_g, y_c, y_f, y_r, y_o), use_container_width=True, config={'displayModeBar': False})
-    with st.container(border=True): st.plotly_chart(make_donut_chart("LAST 6 HOURS", h_t, h_g, h_c, h_f, h_r, h_o), use_container_width=True, config={'displayModeBar': False})
+    # 💡 theme=None을 주입하여 Streamlit의 다크 테마 강제 덮어쓰기 무효화 (글자색 또렷하게 렌더링)
+    with st.container(border=True): st.plotly_chart(make_donut_chart(f"OVERALL ({time_range})", o_t, o_g, o_c, o_f, o_r, o_o), use_container_width=True, config={'displayModeBar': False}, theme=None)
+    with st.container(border=True): st.plotly_chart(make_donut_chart("YESTERDAY", y_t, y_g, y_c, y_f, y_r, y_o), use_container_width=True, config={'displayModeBar': False}, theme=None)
+    with st.container(border=True): st.plotly_chart(make_donut_chart("LAST 6 HOURS", h_t, h_g, h_c, h_f, h_r, h_o), use_container_width=True, config={'displayModeBar': False}, theme=None)
 
 with col_mid:
     if not base_df_active.empty:
@@ -482,23 +486,24 @@ with col_mid:
                     line=dict(color=c1, width=3, shape='spline'), marker=dict(size=8, color=c1, symbol='diamond'), hovertext=m_df['HoverText']
                 ))
 
+        # 💡 범례(Legend) 폰트 색상을 #1e293b로 강제 지정
         fig_yld.update_layout(
             title=dict(text=f"■ YIELD TREND ({time_range})", font=dict(color='#1e293b', size=16, weight='bold', family="'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif")),
             plot_bgcolor='#ffffff', paper_bgcolor='#ffffff',
             font=dict(color='#1e293b', family="'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif"),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), 
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(color='#1e293b', size=12)), 
             margin=dict(l=30, r=30, t=70, b=30), height=380, hovermode='x unified'
         )
         
-        # 💡 [글자색 명시적 설정: tickfont, titlefont 적용]
         if not base_df_active.empty:
             x_labels_yld = [r['DateTime'].strftime('%m-%d %H:%M') for _, r in base_df_active.iterrows()]
             fig_yld.update_xaxes(showgrid=True, gridcolor='#e2e8f0', linecolor='#94a3b8', tickmode='array', tickvals=base_df_active.index, ticktext=x_labels_yld, tickfont=dict(color='#1e293b', size=11))
         else:
-            fig_yld.update_xaxes(showgrid=True, gridcolor='#e2e8f0', linecolor='#94a3b8')
+            fig_yld.update_xaxes(showgrid=True, gridcolor='#e2e8f0', linecolor='#94a3b8', tickfont=dict(color='#1e293b', size=11))
             
         fig_yld.update_yaxes(title_text="양품율 (%)", range=[y_min, 100.0], tickformat=".1f", showgrid=True, gridcolor='#e2e8f0', linecolor='#94a3b8', tickfont=dict(color='#1e293b', size=11), title_font=dict(color='#1e293b', size=13))
-        st.plotly_chart(fig_yld, use_container_width=True, config={'displayModeBar': False})
+        # 💡 theme=None을 주입하여 Streamlit의 다크 테마 강제 덮어쓰기 무효화
+        st.plotly_chart(fig_yld, use_container_width=True, config={'displayModeBar': False}, theme=None)
         
     # --- 2-2. DEFECT TREND (Bar Chart) ---
     with st.container(border=True):
@@ -518,18 +523,18 @@ with col_mid:
             title=dict(text=f"■ DEFECT TREND ({time_range})", font=dict(color='#1e293b', size=16, weight='bold', family="'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif")),
             plot_bgcolor='#ffffff', paper_bgcolor='#ffffff',
             font=dict(color='#1e293b', family="'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif"),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(color='#1e293b', size=12)),
             margin=dict(l=30, r=30, t=50, b=30), height=380, hovermode='x unified'
         )
         
-        # 💡 [글자색 명시적 설정 및 X축 명칭 추가]
         if not base_df_active.empty:
             fig_def.update_xaxes(title_text="도장일 [도장순서]", showgrid=False, linecolor='#94a3b8', tickmode='array', tickvals=x_indices, ticktext=x_labels_def, tickfont=dict(color='#1e293b', size=11), title_font=dict(color='#1e293b', size=13))
         else:
-            fig_def.update_xaxes(title_text="도장일 [도장순서]", showgrid=False, linecolor='#94a3b8', title_font=dict(color='#1e293b', size=13))
+            fig_def.update_xaxes(title_text="도장일 [도장순서]", showgrid=False, linecolor='#94a3b8', tickfont=dict(color='#1e293b', size=11), title_font=dict(color='#1e293b', size=13))
             
         fig_def.update_yaxes(title_text="불량율 (%)", tickformat=".1f", showgrid=True, gridcolor='#e2e8f0', linecolor='#94a3b8', tickfont=dict(color='#1e293b', size=11), title_font=dict(color='#1e293b', size=13))
-        st.plotly_chart(fig_def, use_container_width=True, config={'displayModeBar': False})
+        # 💡 theme=None을 주입하여 Streamlit의 다크 테마 강제 덮어쓰기 무효화
+        st.plotly_chart(fig_def, use_container_width=True, config={'displayModeBar': False}, theme=None)
 
 with col_right:
     with st.container(border=True):
