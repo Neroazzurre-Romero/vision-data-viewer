@@ -20,6 +20,23 @@ def hex_to_rgba(hex_color, alpha):
     rgb = tuple(int(hex_color[i:i+hlen//3], 16) for i in range(0, hlen, hlen//3))
     return f"rgba({rgb[0]},{rgb[1]},{rgb[2]},{alpha})"
 
+# 💡 이미지 로드 헬퍼 함수
+def get_image_base64(base_name):
+    try:
+        extensions = ['.png', '.jpg', '.jpeg']
+        search_dirs = [os.getcwd(), os.path.dirname(os.path.abspath(__file__))]
+        for directory in search_dirs:
+            for ext in extensions:
+                filepath = os.path.join(directory, base_name + ext)
+                if os.path.exists(filepath):
+                    with open(filepath, "rb") as img_file:
+                        encoded = base64.b64encode(img_file.read()).decode('utf-8')
+                        mime_type = "image/jpeg" if ext in ['.jpg', '.jpeg'] else "image/png"
+                        return f"data:{mime_type};base64,{encoded}"
+    except Exception:
+        pass
+    return None
+
 # 💡 뷰어 전용 상태 초기화
 if "current_page" not in st.session_state: st.session_state.current_page = "viewer"
 if "rotate_idx" not in st.session_state: st.session_state.rotate_idx = 0
@@ -48,8 +65,8 @@ div[data-baseweb="input"] > div { background-color: #ffffff !important; border: 
 div[data-baseweb="input"] input { color: #1e293b !important; font-weight: bold !important; }
 div[data-testid="stRadio"] label, div[data-testid="stRadio"] div { color: #1e293b !important; font-weight: bold !important; cursor: pointer !important; }
 
-/* 💡 라디오 버튼(조회 기간) 우측 정렬 강제 적용 */
-div[data-testid="stRadio"] { display: flex; justify-content: flex-end; width: 100%; }
+/* 💡 라디오 버튼(조회 기간) 우측 끝 정렬 강제 적용 */
+div[data-testid="stRadio"] { display: flex; justify-content: flex-end !important; width: 100%; margin-right: 0px !important; }
 div[role="radiogroup"] { justify-content: flex-end !important; flex-wrap: nowrap !important; }
 
 div[data-testid="stVerticalBlockBorderWrapper"] { background-color: #ffffff !important; border-radius: 12px !important; border: 1px solid #e2e8f0 !important; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03) !important; padding: 1.5rem !important; margin-bottom: 0.8rem !important; }
@@ -266,13 +283,24 @@ if not config:
 if "viewer_time_range" not in st.session_state:
     st.session_state.viewer_time_range = config.get("time_range", "48H")
 
-# 💡 자바스크립트: Manage app 배지 초강력 소멸(부모 DOM CSS 주입) & 자동 새로고침 & 오토 로테이션
+# 💡 자바스크립트: 뱃지 투명 오버레이 방어막 & 자동 새로고침(30분) & 로테이션(10분)
 auto_script = f"""
 <script>
-const nukeManageApp = () => {{
+const setupBadgeBlocker = () => {{
     try {{
-        // 최상위(부모) Document에 CSS 강제 주입하여 Streamlit 렌더링 시스템 원천 차단
         const pDoc = window.parent.document;
+        
+        // 1. 사용자 아이디어 적용: 투명한 방어막(Overlay)을 우측 하단에 생성하여 클릭 원천 차단
+        if (!pDoc.getElementById('badge-blocker')) {{
+            const blocker = pDoc.createElement('div');
+            blocker.id = 'badge-blocker';
+            // 우측 하단 150x150px 영역을 투명하게 덮고, 클릭 시 무시하도록 설정 (z-index 최상위)
+            blocker.style.cssText = 'position:fixed; bottom:0; right:0; width:150px; height:150px; background:rgba(255,255,255,0.001); z-index:999999999; cursor:default;';
+            blocker.addEventListener('click', (e) => {{ e.stopPropagation(); e.preventDefault(); }}, true);
+            pDoc.body.appendChild(blocker);
+        }}
+
+        // 2. 혹시 모를 시각적 제거를 위한 CSS 강제 주입
         if (!pDoc.getElementById('nuke-css')) {{
             const style = pDoc.createElement('style');
             style.id = 'nuke-css';
@@ -290,19 +318,10 @@ const nukeManageApp = () => {{
             `;
             pDoc.head.appendChild(style);
         }}
-        
-        // 텍스트 기반 폴백(Fallback) 제거
-        const els = pDoc.querySelectorAll('button, a, span, div');
-        els.forEach(el => {{
-            if (el.textContent && el.textContent.trim() === '< Manage app') {{
-                el.style.setProperty('display', 'none', 'important');
-                if(el.parentElement) el.parentElement.style.setProperty('display', 'none', 'important');
-            }}
-        }});
     }} catch (e) {{}}
 }};
-nukeManageApp();
-setInterval(nukeManageApp, 1000); // 1초 단위 감시망 구축
+setupBadgeBlocker();
+setInterval(setupBadgeBlocker, 1000); 
 
 // 30분(1800000ms) 자동 새로고침 (RELOAD 클릭)
 setTimeout(function() {{
@@ -337,6 +356,15 @@ with col2:
         if st.button("RELOAD", type="primary", use_container_width=True, key="viewer_reload"):
             st.cache_data.clear()
             st.rerun()
+
+# 💡 [라디오 버튼 우측 정렬 배치 (컬럼 비율을 조정하여 '종합 양품율' 카드 바로 위로 밀착)]
+rad_c1, rad_c2 = st.columns([0.75, 0.25])
+with rad_c2:
+    options_list = ["6H", "24H", "48H", "72H", "96H"]
+    idx = options_list.index(st.session_state.viewer_time_range) if st.session_state.viewer_time_range in options_list else 2
+    st.session_state.viewer_time_range = st.radio("조회 기간", options_list, index=idx, horizontal=True, label_visibility="collapsed", key='v_time_range_radio')
+
+time_range = st.session_state.viewer_time_range
 
 df = load_universal_data().copy()
 if df.empty: 
@@ -384,18 +412,8 @@ df['Def_Offset'] = df.get('옵셋불량율', pd.Series([np.nan]*len(df))).apply(
 if df['Def_Offset'].isna().all(): df['Def_Offset'] = np.where(df['검사수량'] > 0, (df['옵셋불량_Qty'] / df['검사수량']) * 100, 0.0)
 if '모델명(MI)' not in df.columns or df['모델명(MI)'].replace('', np.nan).isna().all(): df['모델명(MI)'] = 'ALL_MODELS'
 
-# 💡 [NameError 방지: now_kst, target_end_date 변수 정의 복구]
 now_kst = datetime.now(timezone(timedelta(hours=9))).replace(tzinfo=None)
 target_end_date = now_kst.date() 
-
-# 💡 [라디오 버튼 우측 정렬 배치 (종합 양품율 카드 바로 위로 이동)]
-rad_c1, rad_c2 = st.columns([0.6, 0.4])
-with rad_c2:
-    options_list = ["6H", "24H", "48H", "72H", "96H"]
-    idx = options_list.index(st.session_state.viewer_time_range) if st.session_state.viewer_time_range in options_list else 2
-    st.session_state.viewer_time_range = st.radio("조회 기간", options_list, index=idx, horizontal=True, label_visibility="collapsed", key='v_time_range_radio')
-
-time_range = st.session_state.viewer_time_range
 
 # 💡 [6H 및 기간별 실시간 필터링]
 if time_range == "6H":
