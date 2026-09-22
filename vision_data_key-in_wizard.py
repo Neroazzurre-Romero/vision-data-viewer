@@ -25,7 +25,7 @@ if "current_page" not in st.session_state: st.session_state.current_page = "view
 if "rotate_idx" not in st.session_state: st.session_state.rotate_idx = 0
 if "viewer_authenticated" not in st.session_state: st.session_state.viewer_authenticated = False
 
-# 💡 뷰어 전용 프리미엄 UI 및 [Manage app 완벽 숨김 처리 CSS]
+# 💡 뷰어 전용 프리미엄 UI 및 [메뉴 숨김 처리 CSS]
 global_theme_css = """
 <style>
 /* 🚫 Streamlit 기본 상단 헤더, 메뉴, 툴바 완벽 은닉 */
@@ -33,12 +33,6 @@ header[data-testid="stHeader"] { display: none !important; }
 #MainMenu { display: none !important; visibility: hidden !important; }
 [data-testid="stToolbar"] { display: none !important; visibility: hidden !important; }
 footer { display: none !important; } 
-
-/* 🚫 Streamlit Cloud 하단 '< Manage app' 버튼 CSS 1차 완벽 은닉 */
-[data-testid="stAppDeployButton"] { display: none !important; visibility: hidden !important; }
-.stDeployButton { display: none !important; visibility: hidden !important; }
-[data-testid="viewerBadge"] { display: none !important; visibility: hidden !important; }
-[class^="viewerBadge_"] { display: none !important; visibility: hidden !important; }
 
 /* 🚫 사이드바 및 붕 뜨는 공간 제거 */
 [data-testid="collapsedControl"] { display: none !important; pointer-events: none !important; }
@@ -272,26 +266,43 @@ if not config:
 if "viewer_time_range" not in st.session_state:
     st.session_state.viewer_time_range = config.get("time_range", "48H")
 
-# 💡 자바스크립트: Manage app 배지 텍스트 추적 소멸 & 자동 새로고침(30분) & 로테이션(10분)
+# 💡 자바스크립트: Manage app 배지 초강력 소멸(부모 DOM CSS 주입) & 자동 새로고침 & 오토 로테이션
 auto_script = f"""
 <script>
-// 💡 무한 로딩 없는 초강력 Manage app 텍스트 추적 소멸 로직
-const hideBadges = () => {{
+const nukeManageApp = () => {{
     try {{
-        const badges = window.parent.document.querySelectorAll('[data-testid="stAppDeployButton"], .stDeployButton, [data-testid="manage-app-button"]');
-        badges.forEach(b => {{ b.style.setProperty('display', 'none', 'important'); }});
+        // 최상위(부모) Document에 CSS 강제 주입하여 Streamlit 렌더링 시스템 원천 차단
+        const pDoc = window.parent.document;
+        if (!pDoc.getElementById('nuke-css')) {{
+            const style = pDoc.createElement('style');
+            style.id = 'nuke-css';
+            style.innerHTML = `
+                [data-testid="manage-app-button"],
+                [data-testid="stAppDeployButton"],
+                .stDeployButton,
+                div[class^="viewerBadge"],
+                div[class*="viewerBadge"] {{
+                    display: none !important;
+                    opacity: 0 !important;
+                    visibility: hidden !important;
+                    pointer-events: none !important;
+                }}
+            `;
+            pDoc.head.appendChild(style);
+        }}
         
-        const elements = window.parent.document.querySelectorAll('*');
-        for (let el of elements) {{
-            if (el.innerText && el.innerText.trim() === '< Manage app') {{
+        // 텍스트 기반 폴백(Fallback) 제거
+        const els = pDoc.querySelectorAll('button, a, span, div');
+        els.forEach(el => {{
+            if (el.textContent && el.textContent.trim() === '< Manage app') {{
                 el.style.setProperty('display', 'none', 'important');
                 if(el.parentElement) el.parentElement.style.setProperty('display', 'none', 'important');
             }}
-        }}
+        }});
     }} catch (e) {{}}
 }};
-hideBadges();
-setInterval(hideBadges, 500); 
+nukeManageApp();
+setInterval(nukeManageApp, 1000); // 1초 단위 감시망 구축
 
 // 30분(1800000ms) 자동 새로고침 (RELOAD 클릭)
 setTimeout(function() {{
@@ -310,7 +321,7 @@ setTimeout(function() {{
 """
 components.html(auto_script, height=0, width=0)
 
-# 💡 [상단 네비게이션: 타이틀, 컨트롤 버튼 (로고 완전 제거)]
+# 💡 [상단 네비게이션: 타이틀, 컨트롤 버튼]
 col1, col2 = st.columns([0.7, 0.3])
 with col1:
     st.markdown(f"<div class='command-header' style='font-size: 1.8rem; margin-top: 5px;'><span class='live-dot'></span>AI DEEP-DIVE COMMAND CENTER (VIEWER)</div>", unsafe_allow_html=True)
@@ -326,6 +337,15 @@ with col2:
         if st.button("RELOAD", type="primary", use_container_width=True, key="viewer_reload"):
             st.cache_data.clear()
             st.rerun()
+
+# 💡 [라디오 버튼 우측 정렬 배치 (종합 양품율 카드 바로 위로 이동)]
+rad_c1, rad_c2 = st.columns([0.75, 0.25])
+with rad_c2:
+    options_list = ["6H", "24H", "48H", "72H", "96H"]
+    idx = options_list.index(st.session_state.viewer_time_range) if st.session_state.viewer_time_range in options_list else 2
+    st.session_state.viewer_time_range = st.radio("조회 기간", options_list, index=idx, horizontal=True, label_visibility="collapsed", key='v_time_range_radio')
+
+time_range = st.session_state.viewer_time_range
 
 df = load_universal_data().copy()
 if df.empty: 
@@ -376,16 +396,7 @@ if '모델명(MI)' not in df.columns or df['모델명(MI)'].replace('', np.nan).
 now_kst = datetime.now(timezone(timedelta(hours=9))).replace(tzinfo=None)
 target_end_date = now_kst.date() 
 
-# 💡 [라디오 버튼: 6H 옵션 추가 및 우측 정렬 유지]
-rad_c1, rad_c2 = st.columns([0.6, 0.4])
-with rad_c2:
-    options_list = ["6H", "24H", "48H", "72H", "96H"]
-    idx = options_list.index(st.session_state.viewer_time_range) if st.session_state.viewer_time_range in options_list else 2
-    st.session_state.viewer_time_range = st.radio("조회 기간", options_list, index=idx, horizontal=True, label_visibility="collapsed", key='v_time_range_radio')
-
-time_range = st.session_state.viewer_time_range
-
-# 💡 [6H 및 기간별 필터링 분기]
+# 💡 [6H 및 기간별 실시간 필터링]
 if time_range == "6H":
     target_start_dt = now_kst - timedelta(hours=6)
     df_target = df[df['DateTime'] >= target_start_dt].copy()
@@ -543,7 +554,6 @@ with col_mid:
                     line=dict(color=c1, width=3, shape='spline'), marker=dict(size=8, color=c1, symbol='diamond'), hovertext=m_df['HoverText']
                 ))
 
-        # 💡 좌측 정렬 타이틀, 여백 최적화 유지
         fig_yld.update_layout(
             title=dict(text=f"■ YIELD TREND ({time_range})", font=dict(color='#1e293b', size=16, weight='bold', family="'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif"), x=0.0, xanchor='left'),
             plot_bgcolor='#ffffff', paper_bgcolor='#ffffff',
@@ -583,7 +593,6 @@ with col_mid:
             margin=dict(l=60, r=30, t=80, b=60), height=380, hovermode='x unified'
         )
         
-        # 💡 [X축 명칭 여백(title_standoff=40) 적용]
         if not base_df_active.empty:
             fig_def.update_xaxes(title_text="도장일 [도장순서]", title_standoff=40, showgrid=False, linecolor='#94a3b8', tickmode='array', tickvals=x_indices, ticktext=x_labels_def, tickfont=dict(color='#1e293b', size=11), title_font=dict(color='#1e293b', size=13))
         else:
