@@ -42,7 +42,7 @@ if "current_page" not in st.session_state: st.session_state.current_page = "view
 if "rotate_idx" not in st.session_state: st.session_state.rotate_idx = 0
 if "viewer_authenticated" not in st.session_state: st.session_state.viewer_authenticated = False
 
-# 💡 뷰어 전용 프리미엄 UI 및 [1차 방어: CSS 오버레이 및 메뉴 숨김]
+# 💡 뷰어 전용 프리미엄 UI 및 [메뉴 숨김 처리 CSS]
 global_theme_css = """
 <style>
 /* 🚫 Streamlit 기본 상단 헤더, 메뉴, 툴바 완벽 은닉 */
@@ -58,16 +58,17 @@ body { overscroll-behavior-y: none !important; background-color: #f8fafc !import
 ::-webkit-scrollbar { display: none; }
 .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; padding-left: 1.5rem !important; padding-right: 1.5rem !important; max-width: 98% !important; }
 
-/* 💡 강제 라이트 테마 */
+/* 💡 강제 라이트 테마 (UI 텍스트 충돌 방지) */
 h1, h2, h3, h4, h5, h6, p, label { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif !important; color: #1e293b !important; }
 [data-testid="stAppViewContainer"] { background-color: #f8fafc !important; color: #1e293b !important; }
 div[data-baseweb="input"] > div { background-color: #ffffff !important; border: 1px solid #cbd5e1 !important; }
 div[data-baseweb="input"] input { color: #1e293b !important; font-weight: bold !important; }
 div[data-testid="stRadio"] label, div[data-testid="stRadio"] div { color: #1e293b !important; font-weight: bold !important; cursor: pointer !important; }
 
-/* 💡 라디오 버튼(조회 기간) 우측 정렬 강제 적용 */
+/* 💡 라디오 버튼(조회 기간) 우측 끝 정렬 및 줄바꿈 방지(태블릿 대응) */
 div[data-testid="stRadio"] { display: flex; justify-content: flex-end !important; width: 100%; margin-right: 0px !important; }
-div[role="radiogroup"] { justify-content: flex-end !important; flex-wrap: nowrap !important; }
+div[role="radiogroup"] { justify-content: flex-end !important; flex-wrap: nowrap !important; gap: 15px !important; }
+div[role="radiogroup"] label { white-space: nowrap !important; }
 
 div[data-testid="stVerticalBlockBorderWrapper"] { background-color: #ffffff !important; border-radius: 12px !important; border: 1px solid #e2e8f0 !important; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03) !important; padding: 1.5rem !important; margin-bottom: 0.8rem !important; }
 .command-header { color: #1e293b !important; font-weight: 900 !important; letter-spacing: 1px; }
@@ -86,33 +87,19 @@ div[data-testid="stVerticalBlockBorderWrapper"] { background-color: #ffffff !imp
 @keyframes blink { 0% { opacity: 1; box-shadow: 0 0 10px #3b82f6; } 50% { opacity: 0.3; box-shadow: 0 0 2px #3b82f6; } 100% { opacity: 1; box-shadow: 0 0 10px #3b82f6; } }
 .live-dot { height: 12px; width: 12px; background-color: #3b82f6; border-radius: 50%; display: inline-block; margin-right: 12px; margin-bottom: 2px; animation: blink 1.5s ease-in-out infinite; }
 
-div[data-testid="stButton"] button { height: 2.6rem !important; min-height: 2.6rem !important; font-size: 1.1rem !important; font-weight: bold !important; border-radius: 8px !important; background-color: #E7E6E6 !important; color: #000000 !important; border: 1px solid #cbd5e1 !important; transition: all 0.2s ease; }
-div[data-testid="stButton"] button:hover { background-color: #1e293b !important; color: #ffffff !important; border-color: #1e293b !important; }
-div[data-testid="stButton"] button[kind="primary"] { background-color: #1e293b !important; color: #ffffff !important; border: 1px solid #0f172a !important; }
+/* 💡 버튼 Hover 시 p태그(글자색)를 강제 흰색으로 변경 (Manual Rotate 대응) */
+div[data-testid="stButton"] button { height: 2.6rem !important; min-height: 2.6rem !important; font-size: 1.1rem !important; font-weight: bold !important; border-radius: 8px !important; background-color: #E7E6E6 !important; border: 1px solid #cbd5e1 !important; transition: all 0.2s ease; }
+div[data-testid="stButton"] button p { color: #000000 !important; }
+div[data-testid="stButton"] button:hover { background-color: #1e293b !important; border-color: #1e293b !important; }
+div[data-testid="stButton"] button:hover p { color: #ffffff !important; }
+
+/* 💡 Primary 버튼 전용 (RELOAD 버튼) */
+div[data-testid="stButton"] button[kind="primary"] { background-color: #1e293b !important; border: 1px solid #0f172a !important; }
 div[data-testid="stButton"] button[kind="primary"]:hover { background-color: #0f172a !important; }
 div[data-testid="stButton"] button[kind="primary"] p { color: #ffffff !important; }
-
-/* 🛡️ 1차 방어막: 마우스 클릭 원천 차단 투명 오버레이 (CSS) */
-.stApp::after {
-    content: "" !important;
-    position: fixed !important;
-    bottom: 0 !important;
-    right: 0 !important;
-    width: 150px !important;
-    height: 150px !important;
-    background: rgba(255, 255, 255, 0.001) !important;
-    z-index: 2147483647 !important;
-    pointer-events: auto !important;
-    cursor: default !important;
-}
 </style>
 """
 st.markdown(global_theme_css, unsafe_allow_html=True)
-
-# 🛡️ 2차 방어막: 마우스 클릭 원천 차단 투명 박스 물리적 주입 (HTML)
-st.markdown("""
-<div style="position: fixed; bottom: 0; right: 0; width: 150px; height: 150px; background: rgba(255,255,255,0.001); z-index: 2147483647; cursor: default;" onclick="event.stopPropagation(); event.preventDefault();"></div>
-""", unsafe_allow_html=True)
 
 SCOPE = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 SPREADSHEET_ID = "1DeMJJkuq7bYa4XNK_NbkqZ-vOJKqGhmYXIvHm3yJl8E"
@@ -268,14 +255,14 @@ def load_universal_data():
     return df[final_cols]
 
 # ==========================================
-# 💡 뷰어 전용 로그인 페이지 (로고 반영)
+# 💡 뷰어 전용 로그인 페이지
 # ==========================================
 if not st.session_state.viewer_authenticated:
     st.markdown("<br><br><br><br><br>", unsafe_allow_html=True)
     col_sp1, col_auth, col_sp3 = st.columns([1, 1, 1])
     with col_auth:
         with st.container(border=True):
-            # 💡 비밀번호 인증 페이지 상단에 로고 추가
+            # 💡 로고 유지
             logo_l_data = get_image_base64("logo")
             if logo_l_data:
                 st.markdown(f"<div style='text-align: center;'><img src='{logo_l_data}' style='max-width: 100%; max-height: 80px; object-fit: contain; margin-bottom: 15px;'></div>", unsafe_allow_html=True)
@@ -305,40 +292,55 @@ if not config:
 if "viewer_time_range" not in st.session_state:
     st.session_state.viewer_time_range = config.get("time_range", "48H")
 
-# 🛡️ 3차 방어막: 자바스크립트로 DOM/이벤트 강제 추적 오버레이 주입 & 자동 새로고침(30분) & 로테이션(10분)
+# 💡 자바스크립트: 뱃지 투명 오버레이 방어막 & 자동 새로고침(30분) & 로테이션(10분)
 auto_script = f"""
 <script>
 const setupBadgeBlocker = () => {{
-    const docs = [document];
-    try {{ if(window.parent && window.parent.document) docs.push(window.parent.document); }} catch(e){{}}
-    try {{ if(window.top && window.top.document) docs.push(window.top.document); }} catch(e){{}}
+    try {{
+        const pDoc = window.parent.document;
+        
+        // 투명한 방어막(Overlay) 생성으로 클릭 원천 차단
+        if (!pDoc.getElementById('badge-blocker')) {{
+            const blocker = pDoc.createElement('div');
+            blocker.id = 'badge-blocker';
+            blocker.style.cssText = 'position:fixed; bottom:0; right:0; width:150px; height:150px; background:rgba(255,255,255,0.001); z-index:999999999; cursor:default;';
+            blocker.addEventListener('click', (e) => {{ e.stopPropagation(); e.preventDefault(); }}, true);
+            pDoc.body.appendChild(blocker);
+        }}
 
-    docs.forEach(doc => {{
-        try {{
-            // 방해 요소 투명화 (숨김 처리)
-            doc.querySelectorAll('[data-testid="manage-app-button"], [data-testid="stAppDeployButton"], div[class^="viewerBadge"]').forEach(b => {{
-                b.style.setProperty('display', 'none', 'important');
-                b.style.setProperty('opacity', '0', 'important');
-                b.style.setProperty('pointer-events', 'none', 'important');
-            }});
-            
-            // 핵폭탄급 물리적 투명 오버레이를 우측 하단에 생성
-            if(!doc.getElementById('nuke-overlay-' + doc.title)) {{
-                const overlay = doc.createElement('div');
-                overlay.id = 'nuke-overlay-' + doc.title;
-                overlay.style.cssText = 'position:fixed !important; bottom:0 !important; right:0 !important; width:150px !important; height:150px !important; background:rgba(255,255,255,0.001) !important; z-index:2147483647 !important; cursor:default !important; pointer-events:auto !important;';
-                
-                // 마우스/터치 이벤트 강제 무력화 (클릭 흡수)
-                const killEvent = (e) => {{ e.stopPropagation(); e.preventDefault(); return false; }};
-                ['click', 'mousedown', 'touchstart', 'pointerdown'].forEach(ev => overlay.addEventListener(ev, killEvent, true));
-                
-                doc.body.appendChild(overlay);
+        // 시각적 뱃지 제거 CSS 강제 주입
+        if (!pDoc.getElementById('nuke-css')) {{
+            const style = pDoc.createElement('style');
+            style.id = 'nuke-css';
+            style.innerHTML = `
+                [data-testid="manage-app-button"],
+                [data-testid="stAppDeployButton"],
+                .stDeployButton,
+                div[class^="viewerBadge"],
+                div[class*="viewerBadge"],
+                #creatorBadge,
+                .creatorBadge_container {{
+                    display: none !important;
+                    opacity: 0 !important;
+                    visibility: hidden !important;
+                    pointer-events: none !important;
+                }}
+            `;
+            pDoc.head.appendChild(style);
+        }}
+        
+        // 텍스트 추적 제거
+        const els = pDoc.querySelectorAll('div, a, button, span');
+        els.forEach(el => {{
+            if (el.textContent && (el.textContent.includes('< Manage app') || el.textContent.includes('View profile'))) {{
+                el.style.setProperty('display', 'none', 'important');
+                if(el.parentElement) el.parentElement.style.setProperty('display', 'none', 'important');
             }}
-        }} catch(e) {{}}
-    }});
+        }});
+    }} catch (e) {{}}
 }};
 setupBadgeBlocker();
-setInterval(setupBadgeBlocker, 500); 
+setInterval(setupBadgeBlocker, 1000); 
 
 // 30분(1800000ms) 자동 새로고침 (RELOAD 클릭)
 setTimeout(function() {{
@@ -357,7 +359,7 @@ setTimeout(function() {{
 """
 components.html(auto_script, height=0, width=0)
 
-# 💡 [상단 네비게이션: 타이틀, 컨트롤 버튼 (로고 완전 삭제)]
+# 💡 [상단 네비게이션: 타이틀, 컨트롤 버튼]
 col1, col2 = st.columns([0.7, 0.3])
 with col1:
     st.markdown(f"<div class='command-header' style='font-size: 1.8rem; margin-top: 5px;'><span class='live-dot'></span>AI DEEP-DIVE COMMAND CENTER (VIEWER)</div>", unsafe_allow_html=True)
@@ -374,7 +376,7 @@ with col2:
             st.cache_data.clear()
             st.rerun()
 
-# 💡 [라디오 버튼 우측 정렬 배치: 80% / 20%로 분할하여 마지막 종합 양품율 카드 위에 정확히 밀착]
+# 💡 [라디오 버튼 완벽 우측 정렬 유지: 80% / 20% 분할]
 rad_c1, rad_c2 = st.columns([0.8, 0.2])
 with rad_c2:
     options_list = ["6H", "24H", "48H", "72H", "96H"]
