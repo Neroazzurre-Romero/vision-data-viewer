@@ -20,29 +20,12 @@ def hex_to_rgba(hex_color, alpha):
     rgb = tuple(int(hex_color[i:i+hlen//3], 16) for i in range(0, hlen, hlen//3))
     return f"rgba({rgb[0]},{rgb[1]},{rgb[2]},{alpha})"
 
-# 💡 이미지 로드 헬퍼 함수
-def get_image_base64(base_name):
-    try:
-        extensions = ['.png', '.jpg', '.jpeg']
-        search_dirs = [os.getcwd(), os.path.dirname(os.path.abspath(__file__))]
-        for directory in search_dirs:
-            for ext in extensions:
-                filepath = os.path.join(directory, base_name + ext)
-                if os.path.exists(filepath):
-                    with open(filepath, "rb") as img_file:
-                        encoded = base64.b64encode(img_file.read()).decode('utf-8')
-                        mime_type = "image/jpeg" if ext in ['.jpg', '.jpeg'] else "image/png"
-                        return f"data:{mime_type};base64,{encoded}"
-    except Exception:
-        pass
-    return None
-
 # 💡 뷰어 전용 상태 초기화
 if "current_page" not in st.session_state: st.session_state.current_page = "viewer"
 if "rotate_idx" not in st.session_state: st.session_state.rotate_idx = 0
 if "viewer_authenticated" not in st.session_state: st.session_state.viewer_authenticated = False
 
-# 💡 뷰어 전용 프리미엄 UI 및 [모든 뱃지/메뉴 완벽 숨김 처리 CSS]
+# 💡 뷰어 전용 프리미엄 UI 및 [메뉴 숨김 처리 CSS]
 global_theme_css = """
 <style>
 /* 🚫 Streamlit 기본 상단 헤더, 메뉴, 툴바 완벽 은닉 */
@@ -50,15 +33,6 @@ header[data-testid="stHeader"] { display: none !important; }
 #MainMenu { display: none !important; visibility: hidden !important; }
 [data-testid="stToolbar"] { display: none !important; visibility: hidden !important; }
 footer { display: none !important; } 
-
-/* 🚫 Streamlit Cloud Creator Badge 및 Manage app 버튼 초강력 은닉 */
-[data-testid="stAppDeployButton"] { display: none !important; visibility: hidden !important; }
-.stDeployButton { display: none !important; visibility: hidden !important; }
-[data-testid="viewerBadge"] { display: none !important; visibility: hidden !important; }
-[class^="viewerBadge_"] { display: none !important; visibility: hidden !important; }
-#creatorBadge { display: none !important; visibility: hidden !important; pointer-events: none !important; }
-.creatorBadge_container { display: none !important; visibility: hidden !important; pointer-events: none !important; }
-iframe[title="Streamlit Toolbar"] { display: none !important; visibility: hidden !important; }
 
 /* 🚫 사이드바 및 붕 뜨는 공간 제거 */
 [data-testid="collapsedControl"] { display: none !important; pointer-events: none !important; }
@@ -260,18 +234,13 @@ def load_universal_data():
     return df[final_cols]
 
 # ==========================================
-# 💡 뷰어 전용 로그인 페이지 (로고 반영)
+# 💡 뷰어 전용 로그인 페이지
 # ==========================================
 if not st.session_state.viewer_authenticated:
     st.markdown("<br><br><br><br><br>", unsafe_allow_html=True)
     col_sp1, col_auth, col_sp3 = st.columns([1, 1, 1])
     with col_auth:
         with st.container(border=True):
-            # 💡 비밀번호 인증 페이지 상단에 로고 추가
-            logo_l_data = get_image_base64("logo")
-            if logo_l_data:
-                st.markdown(f"<div style='text-align: center;'><img src='{logo_l_data}' style='max-width: 100%; max-height: 80px; object-fit: contain; margin-bottom: 15px;'></div>", unsafe_allow_html=True)
-                
             st.markdown("<h3 style='text-align:center; color:#1e293b; font-weight:900;'>👁️ 뷰어 접속 인증</h3>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; color:#64748b; margin-bottom:20px; font-weight:bold;'>공유된 대시보드를 확인하려면 비밀번호를 입력하세요.</div>", unsafe_allow_html=True)
             pwd = st.text_input("비밀번호", type="password", label_visibility="collapsed", placeholder="비밀번호 입력", key="viewer_pwd")
@@ -297,47 +266,35 @@ if not config:
 if "viewer_time_range" not in st.session_state:
     st.session_state.viewer_time_range = config.get("time_range", "48H")
 
-# 💡 자바스크립트: 프로필 뱃지 완벽 추적 제거 & 자동 새로고침 & 오토 로테이션
+# 💡 자바스크립트: Manage app 배지 초강력 소멸(부모 DOM CSS 주입) & 자동 새로고침 & 오토 로테이션
 auto_script = f"""
 <script>
 const nukeManageApp = () => {{
     try {{
-        // 1. 최상위 Document CSS 강제 주입으로 배지 렌더링 원천 차단
+        // 최상위(부모) Document에 CSS 강제 주입하여 Streamlit 렌더링 시스템 원천 차단
         const pDoc = window.parent.document;
-        if (!pDoc.getElementById('nuke-badges-css')) {{
+        if (!pDoc.getElementById('nuke-css')) {{
             const style = pDoc.createElement('style');
-            style.id = 'nuke-badges-css';
+            style.id = 'nuke-css';
             style.innerHTML = `
                 [data-testid="manage-app-button"],
                 [data-testid="stAppDeployButton"],
                 .stDeployButton,
                 div[class^="viewerBadge"],
-                div[class*="viewerBadge"],
-                #creatorBadge,
-                .creatorBadge_container,
-                iframe[title*="Streamlit"] {{
+                div[class*="viewerBadge"] {{
                     display: none !important;
                     opacity: 0 !important;
                     visibility: hidden !important;
                     pointer-events: none !important;
-                    z-index: -9999 !important;
                 }}
             `;
             pDoc.head.appendChild(style);
         }}
         
-        // 2. 외부에서 꽂히는 iframe 뱃지 동적 제거
-        const allIframes = pDoc.querySelectorAll('iframe');
-        allIframes.forEach(f => {{
-            if(f.src && (f.src.includes('badge') || f.title.includes('Toolbar'))) {{ 
-                f.style.setProperty('display', 'none', 'important'); 
-            }}
-        }});
-        
-        // 3. 프로필 View / Manage App 텍스트 강제 추적 삭제
-        const els = pDoc.querySelectorAll('div, a, button, span');
+        // 텍스트 기반 폴백(Fallback) 제거
+        const els = pDoc.querySelectorAll('button, a, span, div');
         els.forEach(el => {{
-            if (el.textContent && (el.textContent.includes('< Manage app') || el.textContent.includes('View profile'))) {{
+            if (el.textContent && el.textContent.trim() === '< Manage app') {{
                 el.style.setProperty('display', 'none', 'important');
                 if(el.parentElement) el.parentElement.style.setProperty('display', 'none', 'important');
             }}
@@ -345,9 +302,9 @@ const nukeManageApp = () => {{
     }} catch (e) {{}}
 }};
 nukeManageApp();
-setInterval(nukeManageApp, 500); 
+setInterval(nukeManageApp, 1000); // 1초 단위 감시망 구축
 
-// 30분(1800000ms) 자동 새로고침
+// 30분(1800000ms) 자동 새로고침 (RELOAD 클릭)
 setTimeout(function() {{
     const btns = window.parent.document.querySelectorAll('button');
     for(let i=0; i<btns.length; i++){{
@@ -364,7 +321,7 @@ setTimeout(function() {{
 """
 components.html(auto_script, height=0, width=0)
 
-# 💡 [상단 네비게이션: 타이틀, 컨트롤 버튼 (로고 완전 삭제)]
+# 💡 [상단 네비게이션: 타이틀, 컨트롤 버튼]
 col1, col2 = st.columns([0.7, 0.3])
 with col1:
     st.markdown(f"<div class='command-header' style='font-size: 1.8rem; margin-top: 5px;'><span class='live-dot'></span>AI DEEP-DIVE COMMAND CENTER (VIEWER)</div>", unsafe_allow_html=True)
@@ -381,7 +338,57 @@ with col2:
             st.cache_data.clear()
             st.rerun()
 
-# 💡 [라디오 버튼: 조회 기간 완벽 우측 정렬]
+df = load_universal_data().copy()
+if df.empty: 
+    st.warning("데이터베이스에 렌더링할 정보가 전혀 없습니다.")
+    st.stop()
+    
+def pct_to_float(x):
+    try:
+        if pd.isna(x) or str(x).strip() == '': return np.nan
+        return float(str(x).replace('%', '').replace(',', '').strip())
+    except: return np.nan
+    
+def safe_int(x):
+    try:
+        if pd.isna(x) or str(x).strip() == '': return 0
+        return int(float(str(x).replace(',', '').strip()))
+    except: return 0
+
+def parse_lot(val):
+    val_str = str(val).replace("'", "").strip()
+    if val_str.endswith('.0'): val_str = val_str[:-2]
+    if val_str.isdigit() and len(val_str) > 0: return val_str.zfill(5)
+    return val_str if val_str else 'UNKNOWN'
+    
+if 'LOT NO.' in df.columns: df['LOT NO.'] = df['LOT NO.'].apply(parse_lot)
+df['Yield_1'] = df.get('양품율', pd.Series([np.nan]*len(df))).apply(pct_to_float)
+df['Yield_2'] = df.get('양품율(전/배 포함)', pd.Series([np.nan]*len(df))).apply(pct_to_float)
+df['검사수량'] = df.get('검사 수량', pd.Series([0]*len(df))).apply(safe_int)
+df['완전불량_Qty'] = df.get('완전불량', pd.Series([0]*len(df))).apply(safe_int)
+df['전면불량_Qty'] = df.get('전면불량', pd.Series([0]*len(df))).apply(safe_int)
+df['배면불량_Qty'] = df.get('배면불량', pd.Series([0]*len(df))).apply(safe_int)
+df['옵셋불량_Qty'] = df.get('옵셋불량', pd.Series([0]*len(df))).apply(safe_int)
+df['양품_Qty'] = df.get('양품수량', pd.Series([0]*len(df))).apply(safe_int)
+df['양품_FR_Qty'] = df.get('양품 수량(전/배 포함)', pd.Series([0]*len(df))).apply(safe_int)
+
+if df['Yield_1'].isna().all(): df['Yield_1'] = np.where(df['검사수량'] > 0, (df['양품_Qty'] / df['검사수량']) * 100, np.nan)
+if df['Yield_2'].isna().all(): df['Yield_2'] = np.where(df['검사수량'] > 0, (df['양품_FR_Qty'] / df['검사수량']) * 100, np.nan)
+df['Def_Comp'] = df.get('완전불량율', pd.Series([np.nan]*len(df))).apply(pct_to_float)
+if df['Def_Comp'].isna().all(): df['Def_Comp'] = np.where(df['검사수량'] > 0, (df['완전불량_Qty'] / df['검사수량']) * 100, 0.0)
+df['Def_Front'] = df.get('전면불량율', pd.Series([np.nan]*len(df))).apply(pct_to_float)
+if df['Def_Front'].isna().all(): df['Def_Front'] = np.where(df['검사수량'] > 0, (df['전면불량_Qty'] / df['검사수량']) * 100, 0.0)
+df['Def_Rear'] = df.get('배면불량율', pd.Series([np.nan]*len(df))).apply(pct_to_float)
+if df['Def_Rear'].isna().all(): df['Def_Rear'] = np.where(df['검사수량'] > 0, (df['배면불량_Qty'] / df['검사수량']) * 100, 0.0)
+df['Def_Offset'] = df.get('옵셋불량율', pd.Series([np.nan]*len(df))).apply(pct_to_float)
+if df['Def_Offset'].isna().all(): df['Def_Offset'] = np.where(df['검사수량'] > 0, (df['옵셋불량_Qty'] / df['검사수량']) * 100, 0.0)
+if '모델명(MI)' not in df.columns or df['모델명(MI)'].replace('', np.nan).isna().all(): df['모델명(MI)'] = 'ALL_MODELS'
+
+# 💡 [NameError 방지: now_kst, target_end_date 변수 정의 복구]
+now_kst = datetime.now(timezone(timedelta(hours=9))).replace(tzinfo=None)
+target_end_date = now_kst.date() 
+
+# 💡 [라디오 버튼 우측 정렬 배치 (종합 양품율 카드 바로 위로 이동)]
 rad_c1, rad_c2 = st.columns([0.6, 0.4])
 with rad_c2:
     options_list = ["6H", "24H", "48H", "72H", "96H"]
