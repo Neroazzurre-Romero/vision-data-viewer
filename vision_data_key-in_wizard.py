@@ -24,13 +24,9 @@ if "current_page" not in st.session_state: st.session_state.current_page = "view
 if "rotate_idx" not in st.session_state: st.session_state.rotate_idx = 0
 if "viewer_authenticated" not in st.session_state: st.session_state.viewer_authenticated = False
 
-# 💡 뷰어 전용 프리미엄 UI 및 [강제 라이트 테마 & 메뉴 숨김 처리 CSS]
+# 💡 뷰어 전용 프리미엄 UI (상단 메뉴 숨김 코드 제거 완료)
 global_theme_css = """
 <style>
-/* 🚫 Streamlit 기본 상단 헤더, 메뉴, 툴바 완벽 은닉 */
-header[data-testid="stHeader"] { display: none !important; }
-#MainMenu { display: none !important; visibility: hidden !important; }
-[data-testid="stToolbar"] { display: none !important; visibility: hidden !important; }
 footer { display: none !important; } 
 
 /* 🚫 사이드바 및 붕 뜨는 공간 제거 */
@@ -276,7 +272,6 @@ with col2:
     st.markdown("<br>", unsafe_allow_html=True)
     vc1, vc2 = st.columns([0.6, 0.4])
     with vc1:
-        # 💡 24H 옵션 추가 적용
         st.session_state.viewer_time_range = st.radio("조회 기간", ["24H", "48H", "72H", "96H"], index=["24H", "48H", "72H", "96H"].index(st.session_state.viewer_time_range), horizontal=True, label_visibility="collapsed", key='v_time_range_radio')
     with vc2:
         if st.button("🔄 Manual Rotate", use_container_width=True, key="viewer_manual_rotate"):
@@ -338,7 +333,6 @@ now_kst = datetime.now(timezone(timedelta(hours=9))).replace(tzinfo=None)
 target_end_date = now_kst.date() 
 
 time_range = st.session_state.viewer_time_range
-# 💡 기간 필터링 로직에 24H 추가
 if time_range == "24H": days_sub = 0
 elif time_range == "48H": days_sub = 1
 elif time_range == "72H": days_sub = 2
@@ -527,13 +521,13 @@ with col_mid:
             margin=dict(l=30, r=30, t=50, b=30), height=380, hovermode='x unified'
         )
         
+        # 💡 [글자색 명시적 설정 및 X축 명칭 추가]
         if not base_df_active.empty:
             fig_def.update_xaxes(title_text="도장일 [도장순서]", showgrid=False, linecolor='#94a3b8', tickmode='array', tickvals=x_indices, ticktext=x_labels_def, tickfont=dict(color='#1e293b', size=11), title_font=dict(color='#1e293b', size=13))
         else:
-            fig_def.update_xaxes(title_text="도장일 [도장순서]", showgrid=False, linecolor='#94a3b8', tickfont=dict(color='#1e293b', size=11), title_font=dict(color='#1e293b', size=13))
+            fig_def.update_xaxes(title_text="도장일 [도장순서]", showgrid=False, linecolor='#94a3b8', title_font=dict(color='#1e293b', size=13))
             
         fig_def.update_yaxes(title_text="불량율 (%)", tickformat=".1f", showgrid=True, gridcolor='#e2e8f0', linecolor='#94a3b8', tickfont=dict(color='#1e293b', size=11), title_font=dict(color='#1e293b', size=13))
-        # 💡 theme=None을 주입하여 Streamlit의 다크 테마 강제 덮어쓰기 무효화
         st.plotly_chart(fig_def, use_container_width=True, config={'displayModeBar': False}, theme=None)
 
 with col_right:
