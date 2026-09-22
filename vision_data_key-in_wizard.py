@@ -20,7 +20,7 @@ def hex_to_rgba(hex_color, alpha):
     rgb = tuple(int(hex_color[i:i+hlen//3], 16) for i in range(0, hlen, hlen//3))
     return f"rgba({rgb[0]},{rgb[1]},{rgb[2]},{alpha})"
 
-# 💡 이미지 로드 헬퍼 함수 (로그인 페이지 로고용)
+# 💡 이미지 로드 헬퍼 함수
 def get_image_base64(base_name):
     try:
         extensions = ['.png', '.jpg', '.jpeg']
@@ -42,7 +42,7 @@ if "current_page" not in st.session_state: st.session_state.current_page = "view
 if "rotate_idx" not in st.session_state: st.session_state.rotate_idx = 0
 if "viewer_authenticated" not in st.session_state: st.session_state.viewer_authenticated = False
 
-# 💡 뷰어 전용 프리미엄 UI 및 [1차 방어: CSS 숨김 처리]
+# 💡 뷰어 전용 프리미엄 UI 및 CSS 방어막
 global_theme_css = """
 <style>
 /* 🚫 Streamlit 기본 상단 헤더, 메뉴, 툴바 완벽 은닉 */
@@ -87,33 +87,58 @@ div[data-testid="stVerticalBlockBorderWrapper"] { background-color: #ffffff !imp
 @keyframes blink { 0% { opacity: 1; box-shadow: 0 0 10px #3b82f6; } 50% { opacity: 0.3; box-shadow: 0 0 2px #3b82f6; } 100% { opacity: 1; box-shadow: 0 0 10px #3b82f6; } }
 .live-dot { height: 12px; width: 12px; background-color: #3b82f6; border-radius: 50%; display: inline-block; margin-right: 12px; margin-bottom: 2px; animation: blink 1.5s ease-in-out infinite; }
 
-/* 💡 버튼 Hover 시 p태그(글자색)를 강제 흰색으로 변경 */
+/* 💡 버튼 Hover 및 글자색 강제 흰색 적용 */
 div[data-testid="stButton"] button { height: 2.6rem !important; min-height: 2.6rem !important; font-size: 1.1rem !important; font-weight: bold !important; border-radius: 8px !important; background-color: #E7E6E6 !important; border: 1px solid #cbd5e1 !important; transition: all 0.2s ease; }
 div[data-testid="stButton"] button p { color: #000000 !important; }
 div[data-testid="stButton"] button:hover { background-color: #1e293b !important; border-color: #1e293b !important; }
 div[data-testid="stButton"] button:hover p { color: #ffffff !important; }
-
-/* 💡 Primary 버튼 전용 (RELOAD 버튼) */
 div[data-testid="stButton"] button[kind="primary"] { background-color: #1e293b !important; border: 1px solid #0f172a !important; }
 div[data-testid="stButton"] button[kind="primary"]:hover { background-color: #0f172a !important; }
 div[data-testid="stButton"] button[kind="primary"] p { color: #ffffff !important; }
-
-/* 🛡️ 2차 방어막: Streamlit 앱 컨테이너 우측 하단 CSS 투명 커버 */
-.stApp::after {
-    content: "" !important;
-    position: fixed !important;
-    bottom: 0 !important;
-    right: 0 !important;
-    width: 250px !important;
-    height: 150px !important;
-    background: transparent !important;
-    z-index: 2147483647 !important;
-    pointer-events: auto !important;
-    cursor: default !important;
-}
 </style>
 """
 st.markdown(global_theme_css, unsafe_allow_html=True)
+
+# 🛡️ 전역 방어막: 로그인 화면을 포함한 "모든 페이지"에서 Manage App 원천 차단
+badge_killer_script = """
+<script>
+const nukeManageApp = () => {
+    let docs = [document];
+    try { if (window.parent && window.parent.document) docs.push(window.parent.document); } catch(e){}
+    try { if (window.top && window.top.document && window.top !== window.parent) docs.push(window.top.document); } catch(e){}
+
+    docs.forEach(doc => {
+        try {
+            const selectors = '[data-testid="manage-app-button"], [data-testid="stAppDeployButton"], .stDeployButton, div[class^="viewerBadge"], div[class*="viewerBadge"], #creatorBadge, a[href*="streamlit.io/cloud"]';
+            doc.querySelectorAll(selectors).forEach(el => {
+                el.style.setProperty('display', 'none', 'important');
+                el.style.setProperty('pointer-events', 'none', 'important');
+            });
+            
+            doc.querySelectorAll('div, a, button, span').forEach(el => {
+                if (el.textContent && (el.textContent.includes('< Manage app') || el.textContent.includes('View profile'))) {
+                    el.style.setProperty('display', 'none', 'important');
+                    if (el.parentElement) el.parentElement.style.setProperty('display', 'none', 'important');
+                }
+            });
+
+            if (!doc.getElementById('ultimate-blocker-shield')) {
+                const blocker = doc.createElement('div');
+                blocker.id = 'ultimate-blocker-shield';
+                blocker.style.cssText = 'position:fixed !important; bottom:0 !important; right:0 !important; width:300px !important; height:150px !important; background:transparent !important; z-index:2147483647 !important; cursor:default !important; pointer-events:auto !important;';
+                
+                const killEvent = (e) => { e.stopPropagation(); e.preventDefault(); return false; };
+                ['click', 'mousedown', 'mouseup', 'pointerdown', 'touchstart'].forEach(ev => blocker.addEventListener(ev, killEvent, true));
+                doc.body.appendChild(blocker);
+            }
+        } catch(e) {}
+    });
+};
+nukeManageApp();
+setInterval(nukeManageApp, 100); 
+</script>
+"""
+components.html(badge_killer_script, height=0, width=0)
 
 SCOPE = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 SPREADSHEET_ID = "1DeMJJkuq7bYa4XNK_NbkqZ-vOJKqGhmYXIvHm3yJl8E"
@@ -306,50 +331,9 @@ if not config:
 if "viewer_time_range" not in st.session_state:
     st.session_state.viewer_time_range = config.get("time_range", "48H")
 
-# 🛡️ 3차 방어막: [핵폭탄급 투명 방어막(Overlay) 주입 및 강제 클릭 흡수기능]
+# 💡 대시보드 전용 자바스크립트: 자동 새로고침(30분) & 오토 로테이션(10분)
 auto_script = f"""
 <script>
-const nukeManageApp = () => {{
-    let docs = [document];
-    // 모든 부모 프레임 추적 (CORS 허용 범위 내에서 최대한 접근)
-    try {{ if (window.parent && window.parent.document) docs.push(window.parent.document); }} catch(e){{}}
-    try {{ if (window.top && window.top.document && window.top !== window.parent) docs.push(window.top.document); }} catch(e){{}}
-
-    docs.forEach(doc => {{
-        try {{
-            // 1. 방해 요소 강제 숨김 처리
-            const selectors = '[data-testid="manage-app-button"], [data-testid="stAppDeployButton"], .stDeployButton, div[class^="viewerBadge"], div[class*="viewerBadge"], #creatorBadge, a[href*="streamlit.io/cloud"]';
-            doc.querySelectorAll(selectors).forEach(el => {{
-                el.style.setProperty('display', 'none', 'important');
-                el.style.setProperty('pointer-events', 'none', 'important');
-            }});
-            
-            // 2. 텍스트 스캔으로 '< Manage app' 및 'View profile' 텍스트 찾아 부모까지 박멸
-            doc.querySelectorAll('div, a, button, span').forEach(el => {{
-                if (el.textContent && (el.textContent.includes('< Manage app') || el.textContent.includes('View profile'))) {{
-                    el.style.setProperty('display', 'none', 'important');
-                    if (el.parentElement) el.parentElement.style.setProperty('display', 'none', 'important');
-                }}
-            }});
-
-            // 3. 궁극의 물리적 투명 방어막 설치 (화면 우측 하단 300px * 150px 영역 절대 클릭 불가 상태로 만듦)
-            if (!doc.getElementById('ultimate-blocker-shield')) {{
-                const blocker = doc.createElement('div');
-                blocker.id = 'ultimate-blocker-shield';
-                blocker.style.cssText = 'position:fixed !important; bottom:0 !important; right:0 !important; width:300px !important; height:150px !important; background:transparent !important; z-index:2147483647 !important; cursor:default !important; pointer-events:auto !important;';
-                
-                // 마우스 클릭 및 터치 이벤트 흡수 (블랙홀)
-                const killEvent = (e) => {{ e.stopPropagation(); e.preventDefault(); return false; }};
-                ['click', 'mousedown', 'mouseup', 'pointerdown', 'touchstart'].forEach(ev => blocker.addEventListener(ev, killEvent, true));
-                
-                doc.body.appendChild(blocker);
-            }}
-        }} catch(e) {{}}
-    }});
-}};
-nukeManageApp();
-setInterval(nukeManageApp, 100); // 0.1초마다 스캔하여 절대 나타나지 않게 감시
-
 // 30분(1800000ms) 자동 새로고침 (RELOAD 클릭)
 setTimeout(function() {{
     const btns = window.parent.document.querySelectorAll('button');
