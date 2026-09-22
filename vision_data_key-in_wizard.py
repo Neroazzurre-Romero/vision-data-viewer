@@ -42,7 +42,7 @@ if "current_page" not in st.session_state: st.session_state.current_page = "view
 if "rotate_idx" not in st.session_state: st.session_state.rotate_idx = 0
 if "viewer_authenticated" not in st.session_state: st.session_state.viewer_authenticated = False
 
-# 💡 뷰어 전용 프리미엄 UI 및 [메뉴 숨김 처리 CSS]
+# 💡 뷰어 전용 프리미엄 UI 및 [1차 방어: CSS 오버레이 및 메뉴 숨김]
 global_theme_css = """
 <style>
 /* 🚫 Streamlit 기본 상단 헤더, 메뉴, 툴바 완벽 은닉 */
@@ -58,14 +58,14 @@ body { overscroll-behavior-y: none !important; background-color: #f8fafc !import
 ::-webkit-scrollbar { display: none; }
 .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; padding-left: 1.5rem !important; padding-right: 1.5rem !important; max-width: 98% !important; }
 
-/* 💡 강제 라이트 테마 (UI 텍스트 충돌 방지) */
+/* 💡 강제 라이트 테마 */
 h1, h2, h3, h4, h5, h6, p, label { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif !important; color: #1e293b !important; }
 [data-testid="stAppViewContainer"] { background-color: #f8fafc !important; color: #1e293b !important; }
 div[data-baseweb="input"] > div { background-color: #ffffff !important; border: 1px solid #cbd5e1 !important; }
 div[data-baseweb="input"] input { color: #1e293b !important; font-weight: bold !important; }
 div[data-testid="stRadio"] label, div[data-testid="stRadio"] div { color: #1e293b !important; font-weight: bold !important; cursor: pointer !important; }
 
-/* 💡 라디오 버튼(조회 기간) 우측 끝 정렬 강제 적용 */
+/* 💡 라디오 버튼(조회 기간) 우측 정렬 강제 적용 */
 div[data-testid="stRadio"] { display: flex; justify-content: flex-end !important; width: 100%; margin-right: 0px !important; }
 div[role="radiogroup"] { justify-content: flex-end !important; flex-wrap: nowrap !important; }
 
@@ -73,11 +73,9 @@ div[data-testid="stVerticalBlockBorderWrapper"] { background-color: #ffffff !imp
 .command-header { color: #1e293b !important; font-weight: 900 !important; letter-spacing: 1px; }
 .metric-label { color: #1e293b !important; font-size: 1.1rem !important; font-weight: 800 !important; letter-spacing: 1px; margin-bottom: 10px; border-bottom: 2px solid #e2e8f0; padding-bottom: 5px; }
 
-/* 💡 적용 모델 카드 전용 텍스트 색상 강제 지정 (#FFFFFF) */
+/* 💡 카드 전용 텍스트 색상 강제 지정 */
 .model-card { background: #000000; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); flex: 1; }
 .model-card div, .model-card span { color: #FFFFFF !important; }
-
-/* 💡 상단 KPI 그라데이션 카드 전용 텍스트 색상 강제 지정 (#FFC000) */
 .kpi-card { background: linear-gradient(135deg, #000000, #4472C4); padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); flex: 1; }
 .kpi-card div, .kpi-card span { color: #FFC000 !important; }
 
@@ -93,9 +91,28 @@ div[data-testid="stButton"] button:hover { background-color: #1e293b !important;
 div[data-testid="stButton"] button[kind="primary"] { background-color: #1e293b !important; color: #ffffff !important; border: 1px solid #0f172a !important; }
 div[data-testid="stButton"] button[kind="primary"]:hover { background-color: #0f172a !important; }
 div[data-testid="stButton"] button[kind="primary"] p { color: #ffffff !important; }
+
+/* 🛡️ 1차 방어막: 마우스 클릭 원천 차단 투명 오버레이 (CSS) */
+.stApp::after {
+    content: "" !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    right: 0 !important;
+    width: 150px !important;
+    height: 150px !important;
+    background: rgba(255, 255, 255, 0.001) !important;
+    z-index: 2147483647 !important;
+    pointer-events: auto !important;
+    cursor: default !important;
+}
 </style>
 """
 st.markdown(global_theme_css, unsafe_allow_html=True)
+
+# 🛡️ 2차 방어막: 마우스 클릭 원천 차단 투명 박스 물리적 주입 (HTML)
+st.markdown("""
+<div style="position: fixed; bottom: 0; right: 0; width: 150px; height: 150px; background: rgba(255,255,255,0.001); z-index: 2147483647; cursor: default;" onclick="event.stopPropagation(); event.preventDefault();"></div>
+""", unsafe_allow_html=True)
 
 SCOPE = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 SPREADSHEET_ID = "1DeMJJkuq7bYa4XNK_NbkqZ-vOJKqGhmYXIvHm3yJl8E"
@@ -251,13 +268,18 @@ def load_universal_data():
     return df[final_cols]
 
 # ==========================================
-# 💡 뷰어 전용 로그인 페이지
+# 💡 뷰어 전용 로그인 페이지 (로고 반영)
 # ==========================================
 if not st.session_state.viewer_authenticated:
     st.markdown("<br><br><br><br><br>", unsafe_allow_html=True)
     col_sp1, col_auth, col_sp3 = st.columns([1, 1, 1])
     with col_auth:
         with st.container(border=True):
+            # 💡 비밀번호 인증 페이지 상단에 로고 추가
+            logo_l_data = get_image_base64("logo")
+            if logo_l_data:
+                st.markdown(f"<div style='text-align: center;'><img src='{logo_l_data}' style='max-width: 100%; max-height: 80px; object-fit: contain; margin-bottom: 15px;'></div>", unsafe_allow_html=True)
+                
             st.markdown("<h3 style='text-align:center; color:#1e293b; font-weight:900;'>👁️ 뷰어 접속 인증</h3>", unsafe_allow_html=True)
             st.markdown("<div style='text-align:center; color:#64748b; margin-bottom:20px; font-weight:bold;'>공유된 대시보드를 확인하려면 비밀번호를 입력하세요.</div>", unsafe_allow_html=True)
             pwd = st.text_input("비밀번호", type="password", label_visibility="collapsed", placeholder="비밀번호 입력", key="viewer_pwd")
@@ -283,45 +305,40 @@ if not config:
 if "viewer_time_range" not in st.session_state:
     st.session_state.viewer_time_range = config.get("time_range", "48H")
 
-# 💡 자바스크립트: 뱃지 투명 오버레이 방어막 & 자동 새로고침(30분) & 로테이션(10분)
+# 🛡️ 3차 방어막: 자바스크립트로 DOM/이벤트 강제 추적 오버레이 주입 & 자동 새로고침(30분) & 로테이션(10분)
 auto_script = f"""
 <script>
 const setupBadgeBlocker = () => {{
-    try {{
-        const pDoc = window.parent.document;
-        
-        // 1. 사용자 아이디어 적용: 투명한 방어막(Overlay)을 우측 하단에 생성하여 클릭 원천 차단
-        if (!pDoc.getElementById('badge-blocker')) {{
-            const blocker = pDoc.createElement('div');
-            blocker.id = 'badge-blocker';
-            // 우측 하단 150x150px 영역을 투명하게 덮고, 클릭 시 무시하도록 설정 (z-index 최상위)
-            blocker.style.cssText = 'position:fixed; bottom:0; right:0; width:150px; height:150px; background:rgba(255,255,255,0.001); z-index:999999999; cursor:default;';
-            blocker.addEventListener('click', (e) => {{ e.stopPropagation(); e.preventDefault(); }}, true);
-            pDoc.body.appendChild(blocker);
-        }}
+    const docs = [document];
+    try {{ if(window.parent && window.parent.document) docs.push(window.parent.document); }} catch(e){{}}
+    try {{ if(window.top && window.top.document) docs.push(window.top.document); }} catch(e){{}}
 
-        // 2. 혹시 모를 시각적 제거를 위한 CSS 강제 주입
-        if (!pDoc.getElementById('nuke-css')) {{
-            const style = pDoc.createElement('style');
-            style.id = 'nuke-css';
-            style.innerHTML = `
-                [data-testid="manage-app-button"],
-                [data-testid="stAppDeployButton"],
-                .stDeployButton,
-                div[class^="viewerBadge"],
-                div[class*="viewerBadge"] {{
-                    display: none !important;
-                    opacity: 0 !important;
-                    visibility: hidden !important;
-                    pointer-events: none !important;
-                }}
-            `;
-            pDoc.head.appendChild(style);
-        }}
-    }} catch (e) {{}}
+    docs.forEach(doc => {{
+        try {{
+            // 방해 요소 투명화 (숨김 처리)
+            doc.querySelectorAll('[data-testid="manage-app-button"], [data-testid="stAppDeployButton"], div[class^="viewerBadge"]').forEach(b => {{
+                b.style.setProperty('display', 'none', 'important');
+                b.style.setProperty('opacity', '0', 'important');
+                b.style.setProperty('pointer-events', 'none', 'important');
+            }});
+            
+            // 핵폭탄급 물리적 투명 오버레이를 우측 하단에 생성
+            if(!doc.getElementById('nuke-overlay-' + doc.title)) {{
+                const overlay = doc.createElement('div');
+                overlay.id = 'nuke-overlay-' + doc.title;
+                overlay.style.cssText = 'position:fixed !important; bottom:0 !important; right:0 !important; width:150px !important; height:150px !important; background:rgba(255,255,255,0.001) !important; z-index:2147483647 !important; cursor:default !important; pointer-events:auto !important;';
+                
+                // 마우스/터치 이벤트 강제 무력화 (클릭 흡수)
+                const killEvent = (e) => {{ e.stopPropagation(); e.preventDefault(); return false; }};
+                ['click', 'mousedown', 'touchstart', 'pointerdown'].forEach(ev => overlay.addEventListener(ev, killEvent, true));
+                
+                doc.body.appendChild(overlay);
+            }}
+        }} catch(e) {{}}
+    }});
 }};
 setupBadgeBlocker();
-setInterval(setupBadgeBlocker, 1000); 
+setInterval(setupBadgeBlocker, 500); 
 
 // 30분(1800000ms) 자동 새로고침 (RELOAD 클릭)
 setTimeout(function() {{
@@ -340,7 +357,7 @@ setTimeout(function() {{
 """
 components.html(auto_script, height=0, width=0)
 
-# 💡 [상단 네비게이션: 타이틀, 컨트롤 버튼]
+# 💡 [상단 네비게이션: 타이틀, 컨트롤 버튼 (로고 완전 삭제)]
 col1, col2 = st.columns([0.7, 0.3])
 with col1:
     st.markdown(f"<div class='command-header' style='font-size: 1.8rem; margin-top: 5px;'><span class='live-dot'></span>AI DEEP-DIVE COMMAND CENTER (VIEWER)</div>", unsafe_allow_html=True)
@@ -357,14 +374,17 @@ with col2:
             st.cache_data.clear()
             st.rerun()
 
-# 💡 [라디오 버튼 우측 정렬 배치 (컬럼 비율을 조정하여 '종합 양품율' 카드 바로 위로 밀착)]
-rad_c1, rad_c2 = st.columns([0.75, 0.25])
+# 💡 [라디오 버튼 우측 정렬 배치: 80% / 20%로 분할하여 마지막 종합 양품율 카드 위에 정확히 밀착]
+rad_c1, rad_c2 = st.columns([0.8, 0.2])
 with rad_c2:
     options_list = ["6H", "24H", "48H", "72H", "96H"]
     idx = options_list.index(st.session_state.viewer_time_range) if st.session_state.viewer_time_range in options_list else 2
     st.session_state.viewer_time_range = st.radio("조회 기간", options_list, index=idx, horizontal=True, label_visibility="collapsed", key='v_time_range_radio')
 
 time_range = st.session_state.viewer_time_range
+
+now_kst = datetime.now(timezone(timedelta(hours=9))).replace(tzinfo=None)
+target_end_date = now_kst.date() 
 
 df = load_universal_data().copy()
 if df.empty: 
@@ -411,9 +431,6 @@ if df['Def_Rear'].isna().all(): df['Def_Rear'] = np.where(df['검사수량'] > 0
 df['Def_Offset'] = df.get('옵셋불량율', pd.Series([np.nan]*len(df))).apply(pct_to_float)
 if df['Def_Offset'].isna().all(): df['Def_Offset'] = np.where(df['검사수량'] > 0, (df['옵셋불량_Qty'] / df['검사수량']) * 100, 0.0)
 if '모델명(MI)' not in df.columns or df['모델명(MI)'].replace('', np.nan).isna().all(): df['모델명(MI)'] = 'ALL_MODELS'
-
-now_kst = datetime.now(timezone(timedelta(hours=9))).replace(tzinfo=None)
-target_end_date = now_kst.date() 
 
 # 💡 [6H 및 기간별 실시간 필터링]
 if time_range == "6H":
