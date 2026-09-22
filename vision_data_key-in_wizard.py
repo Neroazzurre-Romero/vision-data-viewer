@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 import json
 import os
 import re
+import base64
 from datetime import datetime, timedelta, timezone
 import streamlit.components.v1 as components
 import gspread
@@ -12,29 +13,28 @@ from google.oauth2.service_account import Credentials
 
 st.set_page_config(page_title="VISION DATA VIEWER", layout="wide", initial_sidebar_state="collapsed")
 
-# 💡 컬러 변환 헬퍼 함수 (Area 차트 반투명 효과용)
+# 💡 컬러 변환 헬퍼 함수
 def hex_to_rgba(hex_color, alpha):
     hex_color = hex_color.lstrip('#')
     hlen = len(hex_color)
     rgb = tuple(int(hex_color[i:i+hlen//3], 16) for i in range(0, hlen, hlen//3))
     return f"rgba({rgb[0]},{rgb[1]},{rgb[2]},{alpha})"
 
-# 💡 이미지 로드 헬퍼 함수
+# 💡 이미지 로드 헬퍼 함수 (Streamlit Cloud 경로 대응 최적화)
 def get_image_base64(base_name):
-    search_dirs = [os.getcwd(), os.path.dirname(os.path.abspath(__file__))]
-    for directory in search_dirs:
-        if not os.path.exists(directory): continue
-        for file in os.listdir(directory):
-            if file.lower().startswith(base_name.lower()) and file.lower().endswith(('.png', '.jpg', '.jpeg')):
-                filepath = os.path.join(directory, file)
-                try:
+    try:
+        extensions = ['.png', '.jpg', '.jpeg']
+        search_dirs = [os.getcwd(), os.path.dirname(os.path.abspath(__file__))]
+        for directory in search_dirs:
+            for ext in extensions:
+                filepath = os.path.join(directory, base_name + ext)
+                if os.path.exists(filepath):
                     with open(filepath, "rb") as img_file:
-                        ext = file.split('.')[-1].lower()
-                        mime_type = "image/jpeg" if ext in ['jpg', 'jpeg'] else "image/png"
                         encoded = base64.b64encode(img_file.read()).decode('utf-8')
+                        mime_type = "image/jpeg" if ext in ['.jpg', '.jpeg'] else "image/png"
                         return f"data:{mime_type};base64,{encoded}"
-                except Exception:
-                    pass
+    except Exception:
+        pass
     return None
 
 # 💡 뷰어 전용 상태 초기화
@@ -51,15 +51,11 @@ header[data-testid="stHeader"] { display: none !important; }
 [data-testid="stToolbar"] { display: none !important; visibility: hidden !important; }
 footer { display: none !important; } 
 
-/* 🚫 Streamlit Cloud 하단 '< Manage app' 버튼 완벽 은닉 (가능한 모든 클래스 동원) */
+/* 🚫 Streamlit Cloud 하단 '< Manage app' 버튼 완벽 은닉 */
 [data-testid="stAppDeployButton"] { display: none !important; visibility: hidden !important; }
-[data-testid="viewerBadge"] { display: none !important; visibility: hidden !important; }
-[data-testid="manage-app-button"] { display: none !important; visibility: hidden !important; }
-#viewerBadge_container__1__ { display: none !important; visibility: hidden !important; }
-.viewerBadge_container__1__ { display: none !important; visibility: hidden !important; }
-[class^="viewerBadge_"] { display: none !important; visibility: hidden !important; }
-[class*="manage-app-button"] { display: none !important; visibility: hidden !important; }
 .stDeployButton { display: none !important; visibility: hidden !important; }
+[data-testid="viewerBadge"] { display: none !important; visibility: hidden !important; }
+[class^="viewerBadge_"] { display: none !important; visibility: hidden !important; }
 
 /* 🚫 사이드바 및 붕 뜨는 공간 제거 */
 [data-testid="collapsedControl"] { display: none !important; pointer-events: none !important; }
@@ -289,25 +285,28 @@ if not config:
 if "viewer_time_range" not in st.session_state:
     st.session_state.viewer_time_range = config.get("time_range", "48H")
 
-# 💡 자바스크립트로 Manage app 배지 텍스트 추적하여 원천 삭제 & 자동 새로고침 & 오토 로테이션 적용
+# 💡 자바스크립트: Manage app 배지 안전하게 원천 삭제 & 자동 새로고침(30분) & 로테이션(10분)
 auto_script = f"""
 <script>
-// Manage app 및 각종 배지 제거 로직 (텍스트 자체를 추적하여 무결점 차단)
+// 💡 무한 로딩 방지용 안전한 Manage app 배지 제거 로직
 const hideBadges = () => {{
-    const elements = window.parent.document.querySelectorAll('div, a, button, span');
-    elements.forEach(el => {{
-        if (el.textContent && el.textContent.includes('Manage app')) {{
-            el.style.setProperty('display', 'none', 'important');
-            if (el.parentElement) el.parentElement.style.setProperty('display', 'none', 'important');
-        }}
-    }});
-    const iframes = window.parent.document.querySelectorAll('iframe');
-    iframes.forEach(f => {{
-        if(f.title && f.title.includes('Deploy')) {{ f.style.setProperty('display', 'none', 'important'); }}
-    }});
+    try {{
+        const spans = window.parent.document.querySelectorAll('span');
+        spans.forEach(span => {{
+            if (span.textContent.trim() === 'Manage app') {{
+                let target = span.closest('button') || span.parentElement;
+                if(target) target.style.setProperty('display', 'none', 'important');
+            }}
+        }});
+        
+        const badges = window.parent.document.querySelectorAll('[data-testid="stAppDeployButton"], .stDeployButton, [data-testid="manage-app-button"]');
+        badges.forEach(b => {{ 
+            b.style.setProperty('display', 'none', 'important'); 
+        }});
+    }} catch (e) {{}}
 }};
 hideBadges();
-setInterval(hideBadges, 1000); // 1초마다 감시하여 즉시 차단
+setInterval(hideBadges, 2000); 
 
 // 30분(1800000ms) 자동 새로고침 (RELOAD 클릭)
 setTimeout(function() {{
@@ -335,12 +334,7 @@ with col2:
     st.markdown("<br>", unsafe_allow_html=True)
     logo_s_data = get_image_base64("at")
     if logo_s_data:
-        # 로고가 정상적으로 변환된 경우 출력
         st.markdown(f"<img src='{logo_s_data}' style='height: 35px; margin-top: -10px;'>", unsafe_allow_html=True)
-    else:
-        # 💡 로고 이미지가 없는 경우 안내 메시지 출력 (at.png 업로드 필요)
-        st.markdown("<div style='color:#ef4444; font-size:0.8rem; font-weight:bold;'>※ 안내: 뷰어 GitHub 레포지토리에 'at.png' 이미지 파일을 업로드해 주세요.</div>", unsafe_allow_html=True)
-
 with col3:
     st.markdown("<br>", unsafe_allow_html=True)
     vc1, vc2 = st.columns(2)
