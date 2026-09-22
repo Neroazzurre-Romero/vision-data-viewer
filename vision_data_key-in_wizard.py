@@ -20,7 +20,7 @@ def hex_to_rgba(hex_color, alpha):
     rgb = tuple(int(hex_color[i:i+hlen//3], 16) for i in range(0, hlen, hlen//3))
     return f"rgba({rgb[0]},{rgb[1]},{rgb[2]},{alpha})"
 
-# 💡 이미지 로드 헬퍼 함수 (Streamlit Cloud 경로 대응 최적화)
+# 💡 이미지 로드 헬퍼 함수
 def get_image_base64(base_name):
     try:
         extensions = ['.png', '.jpg', '.jpeg']
@@ -42,7 +42,7 @@ if "current_page" not in st.session_state: st.session_state.current_page = "view
 if "rotate_idx" not in st.session_state: st.session_state.rotate_idx = 0
 if "viewer_authenticated" not in st.session_state: st.session_state.viewer_authenticated = False
 
-# 💡 뷰어 전용 프리미엄 UI 및 [Manage app 완벽 숨김 처리 CSS]
+# 💡 뷰어 전용 프리미엄 UI CSS
 global_theme_css = """
 <style>
 /* 🚫 Streamlit 기본 상단 헤더, 메뉴, 툴바 완벽 은닉 */
@@ -51,7 +51,7 @@ header[data-testid="stHeader"] { display: none !important; }
 [data-testid="stToolbar"] { display: none !important; visibility: hidden !important; }
 footer { display: none !important; } 
 
-/* 🚫 Streamlit Cloud 하단 '< Manage app' 버튼 완벽 은닉 */
+/* 🚫 Streamlit Cloud 하단 '< Manage app' 버튼 CSS 1차 완벽 은닉 */
 [data-testid="stAppDeployButton"] { display: none !important; visibility: hidden !important; }
 .stDeployButton { display: none !important; visibility: hidden !important; }
 [data-testid="viewerBadge"] { display: none !important; visibility: hidden !important; }
@@ -285,28 +285,28 @@ if not config:
 if "viewer_time_range" not in st.session_state:
     st.session_state.viewer_time_range = config.get("time_range", "48H")
 
-# 💡 자바스크립트: Manage app 배지 안전하게 원천 삭제 & 자동 새로고침(30분) & 로테이션(10분)
+# 💡 자바스크립트: Manage app 배지 초강력 소멸 로직 & 자동 새로고침(30분) & 로테이션(10분)
 auto_script = f"""
 <script>
-// 💡 무한 로딩 방지용 안전한 Manage app 배지 제거 로직
+// 💡 무한 로딩 없는 초강력 Manage app 텍스트 추적 소멸 로직
 const hideBadges = () => {{
     try {{
-        const spans = window.parent.document.querySelectorAll('span');
-        spans.forEach(span => {{
-            if (span.textContent.trim() === 'Manage app') {{
-                let target = span.closest('button') || span.parentElement;
-                if(target) target.style.setProperty('display', 'none', 'important');
-            }}
-        }});
-        
+        // 1. 클래스 및 ID 기반 1차 삭제
         const badges = window.parent.document.querySelectorAll('[data-testid="stAppDeployButton"], .stDeployButton, [data-testid="manage-app-button"]');
-        badges.forEach(b => {{ 
-            b.style.setProperty('display', 'none', 'important'); 
-        }});
+        badges.forEach(b => {{ b.style.setProperty('display', 'none', 'important'); }});
+        
+        // 2. 텍스트 노드 자체를 추적하여 강제 삭제 (이게 핵심)
+        const elements = window.parent.document.querySelectorAll('*');
+        for (let el of elements) {{
+            if (el.innerText && el.innerText.trim() === '< Manage app') {{
+                el.style.setProperty('display', 'none', 'important');
+                if(el.parentElement) el.parentElement.style.setProperty('display', 'none', 'important');
+            }}
+        }}
     }} catch (e) {{}}
 }};
 hideBadges();
-setInterval(hideBadges, 2000); 
+setInterval(hideBadges, 500); // 0.5초마다 감시하여 부활 원천 차단
 
 // 30분(1800000ms) 자동 새로고침 (RELOAD 클릭)
 setTimeout(function() {{
@@ -325,16 +325,16 @@ setTimeout(function() {{
 """
 components.html(auto_script, height=0, width=0)
 
-# 💡 [상단 네비게이션: 타이틀, 로고, 컨트롤 버튼]
+# 💡 [상단 네비게이션: 타이틀, 80px 로고 확대한 컨트롤 버튼]
 col1, col2, col3 = st.columns([0.4, 0.35, 0.25])
 with col1:
     st.markdown(f"<div class='command-header' style='font-size: 1.8rem; margin-top: 5px;'><span class='live-dot'></span>AI DEEP-DIVE COMMAND CENTER (VIEWER)</div>", unsafe_allow_html=True)
     st.markdown("<div style='color: #10b981; font-size: 0.85rem; margin-bottom: 15px; font-weight:bold;'>Shared Dashboard (View Only)</div>", unsafe_allow_html=True)
 with col2:
-    st.markdown("<br>", unsafe_allow_html=True)
+    # 💡 로고 크기 80px로 확대 및 가운데 정렬 적용
     logo_s_data = get_image_base64("at")
     if logo_s_data:
-        st.markdown(f"<img src='{logo_s_data}' style='height: 35px; margin-top: -10px;'>", unsafe_allow_html=True)
+        st.markdown(f"<div style='text-align: center; margin-top: 15px;'><img src='{logo_s_data}' style='height: 80px; object-fit: contain;'></div>", unsafe_allow_html=True)
 with col3:
     st.markdown("<br>", unsafe_allow_html=True)
     vc1, vc2 = st.columns(2)
@@ -555,7 +555,6 @@ with col_mid:
                     line=dict(color=c1, width=3, shape='spline'), marker=dict(size=8, color=c1, symbol='diamond'), hovertext=m_df['HoverText']
                 ))
 
-        # 💡 좌측 정렬 타이틀, 상단 여백 확장(t: 80), 좌하단 여백 확장(l:60, b:60)
         fig_yld.update_layout(
             title=dict(text=f"■ YIELD TREND ({time_range})", font=dict(color='#1e293b', size=16, weight='bold', family="'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif"), x=0.0, xanchor='left'),
             plot_bgcolor='#ffffff', paper_bgcolor='#ffffff',
